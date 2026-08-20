@@ -1,0 +1,14 @@
+{
+  "name": "cu-marketplace",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "build": "turbo run build",
+    "dev": "turbo run dev",
+    "lint": "turbo run lint"
+  },
+  "devDependencies": {
+    "turbo": "^1.13.4",
+    "typescript": "^5.5.4"
+  }
+}
