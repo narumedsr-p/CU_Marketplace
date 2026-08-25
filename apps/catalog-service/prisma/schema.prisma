@@ -1,0 +1,37 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma-client"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum ItemStatus {
+  Available
+  Reserved
+  Sold
+  Suspended
+}
+
+model Category {
+  id        String   @id @default(uuid()) @map("category_id") @db.Uuid
+  name      String
+  items     Item[]
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+}
+
+model Item {
+  id          String     @id @default(uuid()) @map("item_id") @db.Uuid
+  sellerId    String     @map("seller_id") @db.Uuid
+  categoryId  String     @map("category_id") @db.Uuid
+  category    Category   @relation(fields: [categoryId], references: [id])
+  title       String
+  description String?
+  price       Decimal    @db.Decimal(10, 2)
+  status      ItemStatus @default(Available)
+  imageUrls   String[]   @default([]) @map("image_urls")
+  createdAt   DateTime   @default(now()) @map("created_at")
+  updatedAt   DateTime   @updatedAt @map("updated_at")
+}
