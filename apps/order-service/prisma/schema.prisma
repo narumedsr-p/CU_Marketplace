@@ -1,0 +1,27 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma-client"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum OrderStatus {
+  Pending
+  Completed
+  Cancelled
+}
+
+model Order {
+  id          String      @id @default(uuid()) @map("order_id") @db.Uuid
+  buyerId     String      @map("buyer_id") @db.Uuid
+  sellerId    String      @map("seller_id") @db.Uuid
+  itemId      String      @map("item_id") @db.Uuid
+  agreedPrice Decimal     @map("agreed_price") @db.Decimal(10, 2)
+  status      OrderStatus @default(Pending)
+  qrToken     String?     @map("qr_token")
+  createdAt   DateTime    @default(now()) @map("created_at")
+  updatedAt   DateTime    @updatedAt @map("updated_at")
+  completedAt DateTime?   @map("completed_at")
+}
