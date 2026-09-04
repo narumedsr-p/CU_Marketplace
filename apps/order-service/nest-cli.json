@@ -7,5 +7,6 @@
     "webpack": true,
     "webpackConfigPath": "webpack.config.cjs",
     "tsConfigPath": "tsconfig.json"
-  }
+  },
+  "entryFile": "main.cjs"
 }

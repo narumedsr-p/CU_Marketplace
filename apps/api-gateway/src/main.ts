@@ -1,11 +1,13 @@
 import 'dotenv/config';
 import { NestFactory } from '@nestjs/core';
-import { apiReference } from '@scalar/nestjs-api-reference';
 import { AppModule } from './app.module';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
 
+  // dynamic import: @scalar/nestjs-api-reference's CJS build require()s an
+  // ESM-only dependency, which only resolves correctly through import().
+  const { apiReference } = await import('@scalar/nestjs-api-reference');
   app.use(
     '/api/v1/docs',
     apiReference({

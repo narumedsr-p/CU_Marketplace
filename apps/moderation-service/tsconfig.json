@@ -6,9 +6,10 @@
     "moduleResolution": "bundler",
     "outDir": "dist",
     "rootDir": "./src",
-    "incremental": true,
     "strictNullChecks": true,
     "noImplicitAny": false
   },
-  "include": ["src/**/*.ts"]
+  "include": [
+    "src/**/*.ts"
+  ]
 }
