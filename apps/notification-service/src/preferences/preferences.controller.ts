@@ -4,7 +4,7 @@ import { UserClaims } from '@workspace/contracts';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { PreferencesService } from './preferences.service';
 
-@Controller('notifications/preferences')
+@Controller(['notifications/preferences', 'preferences'])
 export class PreferencesController {
   constructor(private readonly preferencesService: PreferencesService) {}
 
