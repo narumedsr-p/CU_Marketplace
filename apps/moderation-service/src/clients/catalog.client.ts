@@ -10,12 +10,18 @@ export class CatalogClient {
   constructor(private readonly httpService: HttpService) {}
 
   async suspendListing(id: string) {
-    // Suspend, not hard-delete: DELETE /items/:itemId now requires the caller to be the
-    // item's actual seller (an ownership check moderation can't satisfy), and a hard delete
-    // would orphan any order pointing at this item anyway. suspend() is the moderation
-    // override built for exactly this — works from any status, no ownership check.
     const { data } = await firstValueFrom(
       this.httpService.patch(`${this.baseUrl}/items/${id}/suspend`, undefined, {
+        headers: this.headers,
+        timeout: 5000,
+      }),
+    );
+    return data;
+  }
+
+  async suspendAllUserItems(sellerId: string) {
+    const { data } = await firstValueFrom(
+      this.httpService.patch(`${this.baseUrl}/users/${sellerId}/items/suspend`, undefined, {
         headers: this.headers,
         timeout: 5000,
       }),
