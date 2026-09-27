@@ -14,7 +14,6 @@ import CatalogScreen from './screens/CatalogScreen';
 import BrowseScreen from './screens/BrowseScreen';
 import ListingScreen from './screens/ListingScreen';
 import SellScreen from './screens/SellScreen';
-import OrderScreen from './screens/OrderScreen';
 import ProfileScreen from './screens/ProfileScreen';
 import AdminCategoriesScreen from './screens/AdminCategoriesScreen';
 
@@ -24,7 +23,7 @@ import {
 } from './data/mockListings';
 import type { Listing, NotificationPrefsState, Order, SellForm } from './types';
 
-type Screen = 'login' | 'home' | 'browse' | 'listing' | 'sell' | 'order' | 'profile' | 'admin';
+type Screen = 'login' | 'home' | 'browse' | 'listing' | 'sell' | 'profile' | 'admin';
 
 const EMPTY_FORM: SellForm = {
   title: '', price: '', cat: 'Electronics', cond: 'Like new', desc: '', spot: 'Sala Phra Kiao',
@@ -54,6 +53,11 @@ export default function App() {
     () => listings.find((l) => l.id === selectedId) || listings[0],
     [listings, selectedId],
   );
+
+  const openScreen = (nextScreen: Screen) => {
+    setScreen(nextScreen);
+    navigate('/');
+  };
 
   const openListing = (l: Listing) => { setSelectedId(l.id); setScreen('listing'); };
 
@@ -86,8 +90,7 @@ export default function App() {
     if (!order) return;
     setListings((ls) => ls.map((l) => (l.id === order.listingId ? { ...l, status: 'Available' as const } : l)));
     setOrder(null);
-    setScreen('home');
-    navigate('/');
+    openScreen('home');
     flash('Order cancelled. Item is Available again.');
   };
 
@@ -124,7 +127,7 @@ export default function App() {
     onChat: () => order && flash('Chat opened with ' + order.seller + '.'),
     onCancel: cancelOrder,
     onRate: () => setRateOpen(true),
-    onBrowse: () => { setScreen('home'); navigate('/'); },
+    onBrowse: () => openScreen('home'),
   };
 
   const currentScreen = (
@@ -167,8 +170,6 @@ export default function App() {
           onAddPhoto={() => flash('Photo picker — max 6, 5MB each.')}
         />
       )}
-
-      {screen === 'order' && <OrderScreen {...orderRouteProps} />}
 
       {screen === 'profile' && (
         <ProfileScreen
@@ -216,13 +217,13 @@ export default function App() {
           user={CURRENT_USER}
           query={query}
           onQueryChange={setQuery}
-          onSearch={() => setScreen('browse')}
+          onSearch={() => openScreen('browse')}
           orderCount={order ? 1 : 0}
-          onHome={() => setScreen('home')}
+          onHome={() => openScreen('home')}
           onWishlist={() => flash('Wishlist — saved listings and auto-match keywords.')}
           onOrders={() => navigate('/orders')}
-          onSell={() => setScreen('sell')}
-          onProfile={() => { setProfileOf(null); setScreen('profile'); }}
+          onSell={() => openScreen('sell')}
+          onProfile={() => { setProfileOf(null); openScreen('profile'); }}
         />
 
         <AppRouter currentScreen={currentScreen} orderRouteProps={orderRouteProps} />
