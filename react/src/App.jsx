@@ -315,34 +315,38 @@ export default function App() {
   const baseStats = { avg: reviewSeller.rating || 4.8, count: reviewSeller.reviewCount || 26 };
 
   // ---------------------------------------------------------------------------------------
-  const authRoutes = (
-    <Routes>
-      <Route path="/suspended" element={<><GlobalStyles /><SuspendedScreen suspension={DEMO_SUSPENSION} onBack={() => navigate('/login')} /></>} />
-      <Route
-        path="*"
-        element={(
-          <>
-            <GlobalStyles />
-            <AppShell>
-              <LoginScreen onSignIn={() => {
-                if (DEMO_SUSPENDED) { navigate('/suspended'); return; }
-                setLoggedIn(true);
-                navigate('/');
-              }} />
-            </AppShell>
-          </>
-        )}
-      />
-    </Routes>
-  );
+  // Suspended is full-bleed (no TopNav/AppShell chrome) whether reached from the
+  // login gate or from the logged-in demo shortcut, so it's checked before either branch.
+  if (location.pathname === '/suspended') {
+    return (
+      <>
+        <GlobalStyles />
+        <SuspendedScreen suspension={DEMO_SUSPENSION} onBack={() => { setLoggedIn(false); navigate('/login'); }} />
+      </>
+    );
+  }
 
-  if (!loggedIn) return authRoutes;
+  if (!loggedIn) {
+    return (
+      <>
+        <GlobalStyles />
+        <AppShell>
+          <LoginScreen onSignIn={() => {
+            if (DEMO_SUSPENDED) { navigate('/suspended'); return; }
+            setLoggedIn(true);
+            navigate('/');
+          }} />
+        </AppShell>
+      </>
+    );
+  }
 
   const viewingSelf = profileOf === null;
   const savedAll = listings.filter((l) => wishIds.includes(l.id));
 
   const moderationScreen = (initialTab) => (
     <ModerationScreen
+      key={initialTab}
       cases={cases} audit={audit} initialTab={initialTab}
       onStartReview={(id) => { patchCase(id, { state: 'In review' }); log('REPORT_REVIEW', id, 'Pending → In review'); }}
       onDismiss={(id) => { patchCase(id, { state: 'Dismissed', resolution: 'Dismissed — no policy violation found.' }); log('REPORT_DISMISS', id, 'No violation'); flash(id + ' dismissed.'); }}
@@ -574,8 +578,6 @@ export default function App() {
 
           <Route path="/moderation" element={moderationScreen('reports')} />
           <Route path="/admin" element={moderationScreen('categories')} />
-
-          <Route path="/suspended" element={<SuspendedScreen suspension={DEMO_SUSPENSION} onBack={() => { setLoggedIn(false); navigate('/login'); }} />} />
 
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
