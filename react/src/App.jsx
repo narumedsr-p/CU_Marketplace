@@ -1,9 +1,11 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { Routes, Route, Navigate, useNavigate, useLocation, useParams } from 'react-router-dom';
 import GlobalStyles from './theme/GlobalStyles';
 import { clock, slugify } from './theme/tokens';
 import AppShell from './layout/AppShell';
 import TopNav from './layout/TopNav';
 import Toast from './components/Toast';
+import RateSellerDialog from './components/RateSellerDialog';
 import useToast from './hooks/useToast';
 import useCatalogFilters from './hooks/useCatalogFilters';
 import useAutoMatch from './hooks/useAutoMatch';
@@ -40,14 +42,61 @@ const EMPTY_FORM = { title: '', price: '', cat: 'Electronics', cond: 'Like new',
 const ME = { ...CURRENT_USER, email: '6731332321@student.chula.ac.th' };
 const DEMO_SUSPENDED = false; // flip to preview the 423 / suspended login state (FR 7.7)
 
+// Screen-key -> route path, used by go() so most existing call sites are untouched.
+const PATH = {
+  login: '/login', suspended: '/suspended', home: '/', browse: '/browse',
+  sell: '/sell', order: '/order', handover: '/handover', review: '/review',
+  profile: '/profile', mylistings: '/mylistings', account: '/account',
+  wishlist: '/wishlist', notifications: '/notifications', chat: '/chat',
+  report: '/report', moderation: '/moderation', admin: '/admin',
+};
+
+/**
+ * Reads :id from the URL, keeps `selectedId` (App state) in sync with it, and
+ * renders ListingScreen against that URL-resolved listing so refresh/back/forward
+ * and direct links to /listing/:id all resolve to the right item.
+ */
+function ListingRoute({ listings, wishIds, setWishIds, setSelectedId, placeOrder, openChat, openReport, setBlocked, flash }) {
+  const { id } = useParams();
+  const navigate = useNavigate();
+  const numId = Number(id);
+  useEffect(() => { setSelectedId(numId); }, [numId, setSelectedId]);
+  const listing = listings.find((l) => l.id === numId);
+  if (!listing) return <Navigate to="/" replace />;
+  return (
+    <ListingScreen
+      listing={listing} wished={wishIds.includes(listing.id)}
+      onPlaceOrder={() => placeOrder(listing)}
+      onChat={() => openChat(listing)}
+      onToggleWishlist={() => {
+        const on = wishIds.includes(listing.id);
+        setWishIds((w) => (on ? w.filter((x) => x !== listing.id) : [...w, listing.id]));
+        flash(on ? 'Removed from wishlist' : 'Added to wishlist');
+      }}
+      onViewSeller={() => navigate('/profile/' + encodeURIComponent(listing.seller))}
+      onReport={() => openReport({ type: 'Listing', title: listing.title, target: listing.seller })}
+      onBlock={() => { setBlocked((b) => [...b, { name: listing.seller, since: 'today' }]); flash(listing.seller + ' blocked. Their listings are hidden from you.'); }}
+    />
+  );
+}
+
+/** Reads :seller from the URL and keeps `profileOf` (App state) in sync with it. */
+function ProfileRoute({ setProfileOf, children }) {
+  const { seller } = useParams();
+  const name = decodeURIComponent(seller);
+  useEffect(() => { setProfileOf(name); }, [name, setProfileOf]);
+  return children;
+}
+
 /**
  * Reference wiring only. Every screen is presentational — replace these useState blocks with
  * your data layer (TanStack Query, WebSocket client, etc.) and keep the props.
  */
 export default function App() {
-  const [screen, setScreen] = useState('login');
-  const [prevScreen, setPrevScreen] = useState('home');
-  const go = (s) => { setPrevScreen(screen); setScreen(s); };
+  const navigate = useNavigate();
+  const location = useLocation();
+  const go = (key) => navigate(PATH[key] || '/' + key);
+  const [loggedIn, setLoggedIn] = useState(false);
 
   const [listings, setListings] = useState(LISTINGS);
   const [query, setQuery] = useState('');
@@ -73,6 +122,7 @@ export default function App() {
   const [reportTarget, setReportTarget] = useState(null);
   const [handover, setHandover] = useState({ role: 'buyer', listingId: null, stage: { buyer: 'ready', seller: 'ready' }, codeError: false });
   const [review, setReview] = useState({ submitted: false, stats: null });
+  const [showRateDialog, setShowRateDialog] = useState(false);
 
   const { toast, flash } = useToast();
   const visible = useMemo(() => listings.filter((l) => l.status !== 'Hidden'), [listings]);
@@ -81,7 +131,7 @@ export default function App() {
 
   const selected = listings.find((l) => l.id === selectedId) || listings[0];
   const mine = visible.filter((l) => l.seller === ME.name);
-  const openListing = (l) => { setSelectedId(typeof l === 'object' ? l.id : l); go('listing'); };
+  const openListing = (l) => { const id = typeof l === 'object' ? l.id : l; setSelectedId(id); navigate('/listing/' + id); };
   const patchListing = (id, patch) => setListings((ls) => ls.map((l) => (l.id === id ? { ...l, ...patch } : l)));
   const log = (code, target, detail, kind = 'Moderation', actor = 'You (admin)') =>
     setAudit((a) => [{ id: 'a' + Date.now() + Math.random(), t: clock(), actor, code, target, detail, kind, fresh: true }, ...a.map((x) => ({ ...x, fresh: false }))]);
@@ -92,24 +142,25 @@ export default function App() {
   const later = (fn, ms) => timers.current.push(setTimeout(fn, ms));
 
   useEffect(() => {
-    if (screen !== 'moderation') return undefined;
+    if (location.pathname !== '/moderation') return undefined;
     let i = 0;
     const id = setInterval(() => { const e = LIVE_EVENTS[i++ % LIVE_EVENTS.length]; log(e.code, e.target, e.detail, e.kind, e.actor); }, 7000);
     return () => clearInterval(id);
-  }, [screen]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [location.pathname]);
 
   // ---- orders ----
-  const placeOrder = () => {
-    if (selected.status !== 'Available') { flash('This item was just reserved by another buyer.'); return; }
-    patchListing(selected.id, { status: 'Reserved' });
+  const placeOrder = (listing) => {
+    if (listing.status !== 'Available') { flash('This item was just reserved by another buyer.'); return; }
+    patchListing(listing.id, { status: 'Reserved' });
     setOrder({
-      reference: 'ORD-2609-0148', handoverCode: 'RSA-4K7Q-2X', listingId: selected.id,
-      title: selected.title, price: selected.price, seller: selected.seller,
-      faculty: selected.faculty, spot: selected.spot,
+      reference: 'ORD-2609-0148', handoverCode: 'RSA-4K7Q-2X', listingId: listing.id,
+      title: listing.title, price: listing.price, seller: listing.seller,
+      faculty: listing.faculty, spot: listing.spot,
       window: 'Today 17:00–19:00', placedAt: 'Today 14:22', status: 'Reserved', rated: false,
     });
     setReview({ submitted: false, stats: null });
-    openChat(selected, 'Order ORD-2609-0148 placed · item reserved for you', false);
+    openChat(listing, 'Order ORD-2609-0148 placed · item reserved for you', false);
     go('order');
     flash('Item reserved. Seller notified in chat.');
   };
@@ -117,6 +168,7 @@ export default function App() {
     patchListing(order.listingId, { status: 'Sold' });
     setOrder((o) => ({ ...o, status: 'Completed', completedAt: clock() }));
     setHandover((h) => ({ ...h, stage: { ...h.stage, buyer: 'done' }, codeError: false }));
+    setShowRateDialog(true);
     flash('Handover confirmed. Order closed.');
   };
   const cancelOrder = () => {
@@ -124,6 +176,21 @@ export default function App() {
     setOrder(null);
     go('home');
     flash('Order cancelled. Item is Available again.');
+  };
+
+  const baseStatsFor = (sellerName) => {
+    const seller = listings.find((l) => l.seller === sellerName) || {};
+    return { avg: seller.rating || 4.8, count: seller.reviewCount || 26 };
+  };
+  const submitQuickRating = ({ stars }) => {
+    if (!order) { setShowRateDialog(false); return; }
+    const base = baseStatsFor(order.seller);
+    const count = base.count + 1;
+    const avg = Math.round(((base.avg * base.count + stars) / count) * 100) / 100;
+    setReview({ submitted: true, stats: { avg, count } });
+    setOrder((o) => (o ? { ...o, rated: true } : o));
+    setShowRateDialog(false);
+    flash('Review posted. Seller average updated.');
   };
 
   const buyerHandover = order ? { ...order, buyer: 'Poonnawit S.' } : null;
@@ -161,7 +228,7 @@ export default function App() {
   };
 
   // ---- chat ----
-  const openChat = (l, systemText, navigate = true) => {
+  const openChat = (l, systemText, shouldNavigate = true) => {
     const existing = threads.find((t) => t.name === l.seller && t.listing.id === l.id) || threads.find((t) => t.name === l.seller);
     const sys = systemText ? [{ id: 'sys' + Date.now(), from: 'system', text: systemText }] : [];
     if (existing) {
@@ -177,7 +244,7 @@ export default function App() {
       }, ...ts]);
       setActiveThread(id);
     }
-    if (navigate) go('chat');
+    if (shouldNavigate) go('chat');
   };
   // Replace with socket.emit('message', …); push server events into `threads`.
   const sendMessage = (threadId, msg) => {
@@ -248,15 +315,94 @@ export default function App() {
   const baseStats = { avg: reviewSeller.rating || 4.8, count: reviewSeller.reviewCount || 26 };
 
   // ---------------------------------------------------------------------------------------
-  if (screen === 'login') {
-    return (<><GlobalStyles /><AppShell><LoginScreen onSignIn={() => setScreen(DEMO_SUSPENDED ? 'suspended' : 'home')} /></AppShell></>);
-  }
-  if (screen === 'suspended') {
-    return (<><GlobalStyles /><SuspendedScreen suspension={DEMO_SUSPENSION} onBack={() => setScreen('login')} /></>);
-  }
+  const authRoutes = (
+    <Routes>
+      <Route path="/suspended" element={<><GlobalStyles /><SuspendedScreen suspension={DEMO_SUSPENSION} onBack={() => navigate('/login')} /></>} />
+      <Route
+        path="*"
+        element={(
+          <>
+            <GlobalStyles />
+            <AppShell>
+              <LoginScreen onSignIn={() => {
+                if (DEMO_SUSPENDED) { navigate('/suspended'); return; }
+                setLoggedIn(true);
+                navigate('/');
+              }} />
+            </AppShell>
+          </>
+        )}
+      />
+    </Routes>
+  );
+
+  if (!loggedIn) return authRoutes;
 
   const viewingSelf = profileOf === null;
   const savedAll = listings.filter((l) => wishIds.includes(l.id));
+
+  const moderationScreen = (initialTab) => (
+    <ModerationScreen
+      cases={cases} audit={audit} initialTab={initialTab}
+      onStartReview={(id) => { patchCase(id, { state: 'In review' }); log('REPORT_REVIEW', id, 'Pending → In review'); }}
+      onDismiss={(id) => { patchCase(id, { state: 'Dismissed', resolution: 'Dismissed — no policy violation found.' }); log('REPORT_DISMISS', id, 'No violation'); flash(id + ' dismissed.'); }}
+      onRemoveListing={(id) => { const c = caseById(id); patchCase(id, { state: 'Closed', resolution: 'Listing removed · seller notified.' }); log('LISTING_REMOVE', c.title, c.reason + ' · ' + id); flash('Listing removed.'); }}
+      onSuspend={(id, { duration, reason }) => {
+        const c = caseById(id); const perm = duration === 'Permanent ban';
+        patchCase(id, { state: 'Closed', resolution: (perm ? 'Permanently banned' : 'Suspended ' + duration) + ' · sessions revoked · ' + c.activeListings + ' listings hidden.' });
+        log(perm ? 'USER_BAN' : 'USER_SUSPEND', c.target, (perm ? 'Permanent' : duration) + ' · “' + reason + '” · ' + id);
+        flash(c.target + (perm ? ' banned.' : ' suspended for ' + duration + '.'));
+      }}
+      onOpenEvidence={(c, e) => flash(e.k + ' for ' + c.id + ' opens read-only.')}
+      categoriesTab={(
+        <AdminCategoriesScreen
+          embedded categories={catRows}
+          onCreate={(c) => { setCategories((cs) => [...cs, { id: Date.now(), ...c }]); log('CATEGORY_CREATE', c.name, '/' + c.slug, 'Categories'); flash('Category created.'); }}
+          onUpdate={(id, patch) => {
+            const old = categories.find((c) => c.id === id);
+            if (patch.name !== old.name) setCatMap((m) => remap(m, old.name, patch.name));
+            setCategories((cs) => cs.map((c) => (c.id === id ? { ...c, ...patch } : c)));
+            log('CATEGORY_UPDATE', old.name, '→ ' + patch.name + ' /' + patch.slug, 'Categories');
+          }}
+          onDelete={(id) => {
+            const c = catRows.find((x) => x.id === id);
+            setCatMap((m) => remap(m, c.name, 'Other'));
+            setCategories((cs) => cs.filter((x) => x.id !== id));
+            log('CATEGORY_DELETE', c.name, c.count + ' listings moved to Other', 'Categories');
+            flash(`“${c.name}” deleted · ${c.count} listings moved to Other.`);
+          }}
+          onMerge={(sourceIds, targetId) => {
+            const target = catRows.find((c) => c.id === targetId);
+            const src = catRows.filter((c) => sourceIds.includes(c.id));
+            const n = src.reduce((a, c) => a + c.count, 0);
+            setCatMap((m) => src.reduce((acc, c) => remap(acc, c.name, target.name), m));
+            setCategories((cs) => cs.filter((c) => !sourceIds.includes(c.id)));
+            log('CATEGORY_MERGE', src.map((c) => c.name).join(' + ') + ' → ' + target.name, n + ' listings reassigned', 'Categories');
+            flash(`Merged into ${target.name} · ${n} listings reassigned.`);
+          }}
+        />
+      )}
+    />
+  );
+
+  const profileScreenElement = (
+    <ProfileScreen
+      isSelf={viewingSelf}
+      user={viewingSelf ? ME : { name: profileOf, memberType: 'Student', faculty: selected.faculty, since: selected.since }}
+      stats={viewingSelf
+        ? [['SELLER RATING', '4.8★'], ['HANDOVERS', '13'], ['ITEMS BOUGHT', String(PURCHASES.length)], ['AVG REPLY', '12 min']]
+        : [['SELLER RATING', selected.rating + '★'], ['HANDOVERS', selected.handovers], ['REVIEWS', selected.reviewCount], ['AVG REPLY', selected.replyTime]]}
+      listings={viewingSelf ? mine : visible.filter((l) => l.seller === profileOf)}
+      purchases={PURCHASES} reviews={REVIEWS}
+      prefs={prefs} notificationPrefs={NOTIFICATION_PREFS}
+      onTogglePref={(k) => setPrefs((p) => ({ ...p, [k]: !p[k] }))}
+      onEditProfile={() => go('account')} onWishlist={() => go('wishlist')}
+      onMyListings={() => go('mylistings')} onSell={() => go('sell')}
+      onChat={() => openChat(selected)}
+      onReport={() => openReport({ type: 'User', title: profileOf, target: profileOf })}
+      onOpenListing={openListing}
+    />
+  );
 
   return (
     <>
@@ -270,228 +416,169 @@ export default function App() {
           onSell={() => go('sell')} onProfile={() => { setProfileOf(null); go('profile'); }}
         />
 
-        {screen === 'home' && (
-          <CatalogScreen
-            listings={visible.filter((l) => l.status !== 'Sold').slice(0, 10)} categories={CATEGORIES}
-            onOpenListing={openListing}
-            onPickCategory={(c) => { setFilters({ ...filters, cat: c }); setQuery(''); go('browse'); }}
-            onSeeAll={() => go('browse')}
-          />
-        )}
-
-        {screen === 'browse' && (
-          <BrowseScreen
-            results={results} filters={filters} onFilterChange={setFilters}
-            categories={CATEGORIES} conditions={CONDITIONS} faculties={FACULTIES}
-            counts={counts} totalCount={visible.length} query={query}
-            onOpenListing={openListing} onReset={reset}
-          />
-        )}
-
-        {screen === 'listing' && (
-          <ListingScreen
-            listing={selected} wished={wishIds.includes(selected.id)}
-            onPlaceOrder={placeOrder} onChat={() => openChat(selected)}
-            onToggleWishlist={() => {
-              const on = wishIds.includes(selected.id);
-              setWishIds((w) => (on ? w.filter((x) => x !== selected.id) : [...w, selected.id]));
-              flash(on ? 'Removed from wishlist' : 'Added to wishlist');
-            }}
-            onViewSeller={() => { setProfileOf(selected.seller); go('profile'); }}
-            onReport={() => openReport({ type: 'Listing', title: selected.title, target: selected.seller })}
-            onBlock={() => { setBlocked((b) => [...b, { name: selected.seller, since: 'today' }]); flash(selected.seller + ' blocked. Their listings are hidden from you.'); }}
-          />
-        )}
-
-        {screen === 'sell' && (
-          <SellScreen
-            form={form} onChange={setForm} onPublish={publish}
-            categories={CATEGORIES} conditions={CONDITIONS} spots={SPOTS}
-            onAddPhoto={() => flash('Photo picker — max 6, 5MB each.')}
-          />
-        )}
-
-        {screen === 'order' && (
-          <OrderScreen
-            order={order}
-            onScanQr={() => { setHandover((h) => ({ ...h, role: 'buyer' })); go('handover'); }}
-            onChat={() => { const l = listings.find((x) => x.id === order.listingId); openChat(l); }}
-            onCancel={cancelOrder} onRate={() => go('review')} onBrowse={() => go('home')}
-          />
-        )}
-
-        {screen === 'handover' && (() => {
-          const isSeller = handover.role === 'seller' && sellerHandover;
-          const o = isSeller ? sellerHandover : buyerHandover;
-          if (!o) return <OrderScreen order={null} onBrowse={() => go('home')} />;
-          return (
-            <HandoverScreen
-              role={isSeller ? 'seller' : 'buyer'} order={o}
-              stage={handover.stage[isSeller ? 'seller' : 'buyer']} codeError={handover.codeError}
-              onRoleChange={sellerHandover && buyerHandover ? (r) => setHandover((h) => ({ ...h, role: r })) : undefined}
-              onScan={() => { setHandover((h) => ({ ...h, stage: { ...h.stage, buyer: 'verifying' } })); later(completeBuyerOrder, 1200); }}
-              onVerifyCode={(code) => (code === order.handoverCode ? completeBuyerOrder() : setHandover((h) => ({ ...h, codeError: true })))}
-              onSimulateScan={() => { patchListing(handover.listingId, { status: 'Sold' }); setReservations((r) => { const n = { ...r }; delete n[handover.listingId]; return n; }); setHandover((h) => ({ ...h, stage: { ...h.stage, seller: 'done' } })); }}
-              onCancelReservation={() => cancelSellerReservation(handover.listingId)}
-              onChat={() => go('chat')} onRate={() => go('review')} onHome={() => go('home')}
+        <Routes>
+          <Route path="/" element={(
+            <CatalogScreen
+              listings={visible.filter((l) => l.status !== 'Sold').slice(0, 10)} categories={CATEGORIES}
+              onOpenListing={openListing}
+              onPickCategory={(c) => { setFilters({ ...filters, cat: c }); setQuery(''); go('browse'); }}
+              onSeeAll={() => go('browse')}
             />
-          );
-        })()}
+          )} />
 
-        {screen === 'review' && (
-          <ReviewScreen
-            order={reviewOrder} reviewerName={ME.name}
-            sellerStats={review.stats || baseStats} submitted={review.submitted}
-            onGoHandover={() => { setHandover((h) => ({ ...h, role: 'buyer' })); go('handover'); }}
-            onHome={() => go('home')}
-            onSubmit={({ stars }) => {
-              const count = baseStats.count + 1;
-              const avg = Math.round(((baseStats.avg * baseStats.count + stars) / count) * 100) / 100;
-              setReview({ submitted: true, stats: { avg, count } });
-              if (order && order.status === 'Completed') setOrder((o) => ({ ...o, rated: true }));
-              flash('Review posted. Seller average updated.');
-            }}
-          />
-        )}
+          <Route path="/browse" element={(
+            <BrowseScreen
+              results={results} filters={filters} onFilterChange={setFilters}
+              categories={CATEGORIES} conditions={CONDITIONS} faculties={FACULTIES}
+              counts={counts} totalCount={visible.length} query={query}
+              onOpenListing={openListing} onReset={reset}
+            />
+          )} />
 
-        {screen === 'profile' && (
-          <ProfileScreen
-            isSelf={viewingSelf}
-            user={viewingSelf ? ME : { name: profileOf, memberType: 'Student', faculty: selected.faculty, since: selected.since }}
-            stats={viewingSelf
-              ? [['SELLER RATING', '4.8★'], ['HANDOVERS', '13'], ['ITEMS BOUGHT', String(PURCHASES.length)], ['AVG REPLY', '12 min']]
-              : [['SELLER RATING', selected.rating + '★'], ['HANDOVERS', selected.handovers], ['REVIEWS', selected.reviewCount], ['AVG REPLY', selected.replyTime]]}
-            listings={viewingSelf ? mine : visible.filter((l) => l.seller === profileOf)}
-            purchases={PURCHASES} reviews={REVIEWS}
-            prefs={prefs} notificationPrefs={NOTIFICATION_PREFS}
-            onTogglePref={(k) => setPrefs((p) => ({ ...p, [k]: !p[k] }))}
-            onEditProfile={() => go('account')} onWishlist={() => go('wishlist')}
-            onMyListings={() => go('mylistings')} onSell={() => go('sell')}
-            onChat={() => openChat(selected)}
-            onReport={() => openReport({ type: 'User', title: profileOf, target: profileOf })}
-            onOpenListing={openListing}
-          />
-        )}
+          <Route path="/listing/:id" element={(
+            <ListingRoute
+              listings={listings} wishIds={wishIds} setWishIds={setWishIds} setSelectedId={setSelectedId}
+              placeOrder={placeOrder} openChat={openChat} openReport={openReport} setBlocked={setBlocked} flash={flash}
+            />
+          )} />
 
-        {screen === 'mylistings' && (
-          <MyListingsScreen
-            listings={mine} reservations={reservations} conditions={CONDITIONS}
-            onSave={(id, patch) => { patchListing(id, patch); flash('Listing updated.'); }}
-            onDelete={(id) => { patchListing(id, { status: 'Hidden' }); setWishIds((w) => w.filter((x) => x !== id)); flash('Listing deleted.'); }}
-            onShowQr={(id) => { setHandover((h) => ({ ...h, role: 'seller', listingId: id })); go('handover'); }}
-            onCancelReservation={cancelSellerReservation}
-            onNew={() => go('sell')}
-          />
-        )}
+          <Route path="/sell" element={(
+            <SellScreen
+              form={form} onChange={setForm} onPublish={publish}
+              categories={CATEGORIES} conditions={CONDITIONS} spots={SPOTS}
+              onAddPhoto={() => flash('Photo picker — max 6, 5MB each.')}
+            />
+          )} />
 
-        {screen === 'account' && (
-          <AccountScreen
-            user={ME} profile={profile} sessions={SESSIONS}
-            myReports={cases.filter((c) => c.mine)} blocked={blocked}
-            listingSummary={`${mine.filter((l) => l.status === 'Available').length} active · ${mine.filter((l) => l.status === 'Reserved').length} reserved · ${mine.filter((l) => l.status === 'Sold').length} sold`}
-            openOrderRef={order && order.status === 'Reserved' ? order.reference : null}
-            onSaveProfile={(p) => { setProfile(p); flash('Profile saved.'); }}
-            onChangePhoto={() => flash('Photo picker — replaces the directory photo.')}
-            onLogout={() => { setScreen('login'); flash('Signed out. Session revoked.'); }}
-            onLogoutAll={() => { setScreen('login'); flash('Signed out on all devices.'); }}
-            onUnblock={(name) => {
-              setBlocked((b) => b.filter((x) => x.name !== name));
-              setThreads((ts) => ts.map((t) => (t.name === name ? { ...t, blocked: false } : t)));
-              flash(name + ' unblocked.');
-            }}
-            onMyListings={() => go('mylistings')}
-            onDeleteAccount={() => { setScreen('login'); flash('Account deletion requested. Personal data is erased within 30 days (PDPA).'); }}
-          />
-        )}
+          <Route path="/order" element={(
+            <OrderScreen
+              order={order}
+              onScanQr={() => { setHandover((h) => ({ ...h, role: 'buyer' })); go('handover'); }}
+              onChat={() => { const l = listings.find((x) => x.id === order.listingId); openChat(l); }}
+              onCancel={cancelOrder} onRate={() => go('review')} onBrowse={() => go('home')}
+            />
+          )} />
 
-        {screen === 'wishlist' && (
-          <WishlistScreen
-            saved={savedAll.filter((l) => l.status !== 'Sold' && l.status !== 'Hidden')}
-            autoRemoved={savedAll.filter((l) => l.status === 'Sold')}
-            alerts={alerts} matches={matches} categories={CATEGORIES}
-            notifyOn={prefs.wishlist} onEnableNotify={() => setPrefs((p) => ({ ...p, wishlist: true }))}
-            onOpenListing={openListing} onBrowse={() => go('browse')}
-            onRemove={(id) => { setWishIds((w) => w.filter((x) => x !== id)); flash('Removed from wishlist'); }}
-            onCreateAlert={(a) => { setRawAlerts((as) => [{ id: Date.now(), on: true, ...a }, ...as]); flash('Alert created.'); }}
-            onUpdateAlert={(id, patch) => { setRawAlerts((as) => as.map((a) => (a.id === id ? { ...a, ...patch } : a))); flash('Alert updated.'); }}
-            onDeleteAlert={(id) => { setRawAlerts((as) => as.filter((a) => a.id !== id)); flash('Alert deleted.'); }}
-            onToggleAlert={(id) => setRawAlerts((as) => as.map((a) => (a.id === id ? { ...a, on: !a.on } : a)))}
-          />
-        )}
-
-        {screen === 'notifications' && (
-          <NotificationsScreen
-            notifications={notifications} prefs={prefs} prefItems={NOTIFICATION_PREFS}
-            onOpen={openNotification}
-            onMarkAllRead={() => setNotifications((ns) => ns.map((n) => ({ ...n, read: true })))}
-            onTogglePref={(k) => setPrefs((p) => ({ ...p, [k]: !p[k] }))}
-          />
-        )}
-
-        {screen === 'chat' && (
-          <ChatScreen
-            threads={threads} activeId={activeThread} typingId={typingId}
-            onSelectThread={(id) => { setActiveThread(id); setThreads((ts) => ts.map((t) => (t.id === id ? { ...t, unread: 0 } : t))); }}
-            onBack={() => setActiveThread(null)}
-            onSend={(id, text) => sendMessage(id, { text })}
-            onAttachPhoto={(id) => sendMessage(id, { image: true })}
-            onToggleBlock={toggleBlock}
-            onReport={(t) => openReport({ type: 'User', title: t.name, target: t.name })}
-            onOpenListing={(l) => openListing(l.id)}
-          />
-        )}
-
-        {screen === 'report' && reportTarget && (
-          <ReportScreen
-            target={{ ...reportTarget, orderRef: order ? order.reference : undefined }}
-            photos={[]} onAddPhoto={() => flash('Photo picker — up to 4 images.')}
-            onSubmit={submitReport} onCancel={() => setScreen(prevScreen)}
-          />
-        )}
-
-        {(screen === 'moderation' || screen === 'admin') && (
-          <ModerationScreen
-            cases={cases} audit={audit} initialTab={screen === 'admin' ? 'categories' : 'reports'}
-            onStartReview={(id) => { patchCase(id, { state: 'In review' }); log('REPORT_REVIEW', id, 'Pending → In review'); }}
-            onDismiss={(id) => { patchCase(id, { state: 'Dismissed', resolution: 'Dismissed — no policy violation found.' }); log('REPORT_DISMISS', id, 'No violation'); flash(id + ' dismissed.'); }}
-            onRemoveListing={(id) => { const c = caseById(id); patchCase(id, { state: 'Closed', resolution: 'Listing removed · seller notified.' }); log('LISTING_REMOVE', c.title, c.reason + ' · ' + id); flash('Listing removed.'); }}
-            onSuspend={(id, { duration, reason }) => {
-              const c = caseById(id); const perm = duration === 'Permanent ban';
-              patchCase(id, { state: 'Closed', resolution: (perm ? 'Permanently banned' : 'Suspended ' + duration) + ' · sessions revoked · ' + c.activeListings + ' listings hidden.' });
-              log(perm ? 'USER_BAN' : 'USER_SUSPEND', c.target, (perm ? 'Permanent' : duration) + ' · “' + reason + '” · ' + id);
-              flash(c.target + (perm ? ' banned.' : ' suspended for ' + duration + '.'));
-            }}
-            onOpenEvidence={(c, e) => flash(e.k + ' for ' + c.id + ' opens read-only.')}
-            categoriesTab={(
-              <AdminCategoriesScreen
-                embedded categories={catRows}
-                onCreate={(c) => { setCategories((cs) => [...cs, { id: Date.now(), ...c }]); log('CATEGORY_CREATE', c.name, '/' + c.slug, 'Categories'); flash('Category created.'); }}
-                onUpdate={(id, patch) => {
-                  const old = categories.find((c) => c.id === id);
-                  if (patch.name !== old.name) setCatMap((m) => remap(m, old.name, patch.name));
-                  setCategories((cs) => cs.map((c) => (c.id === id ? { ...c, ...patch } : c)));
-                  log('CATEGORY_UPDATE', old.name, '→ ' + patch.name + ' /' + patch.slug, 'Categories');
-                }}
-                onDelete={(id) => {
-                  const c = catRows.find((x) => x.id === id);
-                  setCatMap((m) => remap(m, c.name, 'Other'));
-                  setCategories((cs) => cs.filter((x) => x.id !== id));
-                  log('CATEGORY_DELETE', c.name, c.count + ' listings moved to Other', 'Categories');
-                  flash(`“${c.name}” deleted · ${c.count} listings moved to Other.`);
-                }}
-                onMerge={(sourceIds, targetId) => {
-                  const target = catRows.find((c) => c.id === targetId);
-                  const src = catRows.filter((c) => sourceIds.includes(c.id));
-                  const n = src.reduce((a, c) => a + c.count, 0);
-                  setCatMap((m) => src.reduce((acc, c) => remap(acc, c.name, target.name), m));
-                  setCategories((cs) => cs.filter((c) => !sourceIds.includes(c.id)));
-                  log('CATEGORY_MERGE', src.map((c) => c.name).join(' + ') + ' → ' + target.name, n + ' listings reassigned', 'Categories');
-                  flash(`Merged into ${target.name} · ${n} listings reassigned.`);
-                }}
+          <Route path="/handover" element={(() => {
+            const isSeller = handover.role === 'seller' && sellerHandover;
+            const o = isSeller ? sellerHandover : buyerHandover;
+            if (!o) return <OrderScreen order={null} onBrowse={() => go('home')} />;
+            return (
+              <HandoverScreen
+                role={isSeller ? 'seller' : 'buyer'} order={o}
+                stage={handover.stage[isSeller ? 'seller' : 'buyer']} codeError={handover.codeError}
+                onRoleChange={sellerHandover && buyerHandover ? (r) => setHandover((h) => ({ ...h, role: r })) : undefined}
+                onScan={() => { setHandover((h) => ({ ...h, stage: { ...h.stage, buyer: 'verifying' } })); later(completeBuyerOrder, 1200); }}
+                onVerifyCode={(code) => (code === order.handoverCode ? completeBuyerOrder() : setHandover((h) => ({ ...h, codeError: true })))}
+                onSimulateScan={() => { patchListing(handover.listingId, { status: 'Sold' }); setReservations((r) => { const n = { ...r }; delete n[handover.listingId]; return n; }); setHandover((h) => ({ ...h, stage: { ...h.stage, seller: 'done' } })); }}
+                onCancelReservation={() => cancelSellerReservation(handover.listingId)}
+                onChat={() => go('chat')} onRate={() => go('review')} onHome={() => go('home')}
               />
-            )}
-          />
-        )}
+            );
+          })()} />
+
+          <Route path="/review" element={(
+            <ReviewScreen
+              order={reviewOrder} reviewerName={ME.name}
+              sellerStats={review.stats || baseStats} submitted={review.submitted}
+              onGoHandover={() => { setHandover((h) => ({ ...h, role: 'buyer' })); go('handover'); }}
+              onHome={() => go('home')}
+              onSubmit={({ stars }) => {
+                const count = baseStats.count + 1;
+                const avg = Math.round(((baseStats.avg * baseStats.count + stars) / count) * 100) / 100;
+                setReview({ submitted: true, stats: { avg, count } });
+                if (order && order.status === 'Completed') setOrder((o) => ({ ...o, rated: true }));
+                flash('Review posted. Seller average updated.');
+              }}
+            />
+          )} />
+
+          <Route path="/profile" element={profileScreenElement} />
+          <Route path="/profile/:seller" element={<ProfileRoute setProfileOf={setProfileOf}>{profileScreenElement}</ProfileRoute>} />
+
+          <Route path="/mylistings" element={(
+            <MyListingsScreen
+              listings={mine} reservations={reservations} conditions={CONDITIONS}
+              onSave={(id, patch) => { patchListing(id, patch); flash('Listing updated.'); }}
+              onDelete={(id) => { patchListing(id, { status: 'Hidden' }); setWishIds((w) => w.filter((x) => x !== id)); flash('Listing deleted.'); }}
+              onShowQr={(id) => { setHandover((h) => ({ ...h, role: 'seller', listingId: id })); go('handover'); }}
+              onCancelReservation={cancelSellerReservation}
+              onNew={() => go('sell')}
+            />
+          )} />
+
+          <Route path="/account" element={(
+            <AccountScreen
+              user={ME} profile={profile} sessions={SESSIONS}
+              myReports={cases.filter((c) => c.mine)} blocked={blocked}
+              listingSummary={`${mine.filter((l) => l.status === 'Available').length} active · ${mine.filter((l) => l.status === 'Reserved').length} reserved · ${mine.filter((l) => l.status === 'Sold').length} sold`}
+              openOrderRef={order && order.status === 'Reserved' ? order.reference : null}
+              onSaveProfile={(p) => { setProfile(p); flash('Profile saved.'); }}
+              onChangePhoto={() => flash('Photo picker — replaces the directory photo.')}
+              onLogout={() => { setLoggedIn(false); navigate('/login'); flash('Signed out. Session revoked.'); }}
+              onLogoutAll={() => { setLoggedIn(false); navigate('/login'); flash('Signed out on all devices.'); }}
+              onUnblock={(name) => {
+                setBlocked((b) => b.filter((x) => x.name !== name));
+                setThreads((ts) => ts.map((t) => (t.name === name ? { ...t, blocked: false } : t)));
+                flash(name + ' unblocked.');
+              }}
+              onMyListings={() => go('mylistings')}
+              onDeleteAccount={() => { setLoggedIn(false); navigate('/login'); flash('Account deletion requested. Personal data is erased within 30 days (PDPA).'); }}
+            />
+          )} />
+
+          <Route path="/wishlist" element={(
+            <WishlistScreen
+              saved={savedAll.filter((l) => l.status !== 'Sold' && l.status !== 'Hidden')}
+              autoRemoved={savedAll.filter((l) => l.status === 'Sold')}
+              alerts={alerts} matches={matches} categories={CATEGORIES}
+              notifyOn={prefs.wishlist} onEnableNotify={() => setPrefs((p) => ({ ...p, wishlist: true }))}
+              onOpenListing={openListing} onBrowse={() => go('browse')}
+              onRemove={(id) => { setWishIds((w) => w.filter((x) => x !== id)); flash('Removed from wishlist'); }}
+              onCreateAlert={(a) => { setRawAlerts((as) => [{ id: Date.now(), on: true, ...a }, ...as]); flash('Alert created.'); }}
+              onUpdateAlert={(id, patch) => { setRawAlerts((as) => as.map((a) => (a.id === id ? { ...a, ...patch } : a))); flash('Alert updated.'); }}
+              onDeleteAlert={(id) => { setRawAlerts((as) => as.filter((a) => a.id !== id)); flash('Alert deleted.'); }}
+              onToggleAlert={(id) => setRawAlerts((as) => as.map((a) => (a.id === id ? { ...a, on: !a.on } : a)))}
+            />
+          )} />
+
+          <Route path="/notifications" element={(
+            <NotificationsScreen
+              notifications={notifications} prefs={prefs} prefItems={NOTIFICATION_PREFS}
+              onOpen={openNotification}
+              onMarkAllRead={() => setNotifications((ns) => ns.map((n) => ({ ...n, read: true })))}
+              onTogglePref={(k) => setPrefs((p) => ({ ...p, [k]: !p[k] }))}
+            />
+          )} />
+
+          <Route path="/chat" element={(
+            <ChatScreen
+              threads={threads} activeId={activeThread} typingId={typingId}
+              onSelectThread={(id) => { setActiveThread(id); setThreads((ts) => ts.map((t) => (t.id === id ? { ...t, unread: 0 } : t))); }}
+              onBack={() => setActiveThread(null)}
+              onSend={(id, text) => sendMessage(id, { text })}
+              onAttachPhoto={(id) => sendMessage(id, { image: true })}
+              onToggleBlock={toggleBlock}
+              onReport={(t) => openReport({ type: 'User', title: t.name, target: t.name })}
+              onOpenListing={(l) => openListing(l.id)}
+            />
+          )} />
+
+          <Route path="/report" element={reportTarget ? (
+            <ReportScreen
+              target={{ ...reportTarget, orderRef: order ? order.reference : undefined }}
+              photos={[]} onAddPhoto={() => flash('Photo picker — up to 4 images.')}
+              onSubmit={submitReport} onCancel={() => navigate(-1)}
+            />
+          ) : <Navigate to="/account" replace />} />
+
+          <Route path="/moderation" element={moderationScreen('reports')} />
+          <Route path="/admin" element={moderationScreen('categories')} />
+
+          <Route path="/suspended" element={<SuspendedScreen suspension={DEMO_SUSPENSION} onBack={() => { setLoggedIn(false); navigate('/login'); }} />} />
+
+          <Route path="*" element={<Navigate to="/" replace />} />
+        </Routes>
 
         <div style={{ padding: '0 24px 22px', display: 'flex', gap: 14, flexWrap: 'wrap', font: "500 11.5px/1.4 'Bai Jamjuree'", color: '#A8909B' }}>
           {/* Demo-only shortcuts to screens that have no nav entry for a regular user. */}
@@ -499,10 +586,11 @@ export default function App() {
           {[['moderation', 'Admin · moderation'], ['admin', 'Admin · categories'], ['account', 'Account'], ['mylistings', 'My listings']].map(([k, l]) => (
             <span key={k} onClick={() => go(k)} style={{ cursor: 'pointer', textDecoration: 'underline' }}>{l}</span>
           ))}
-          <span onClick={() => setScreen('suspended')} style={{ cursor: 'pointer', textDecoration: 'underline' }}>Suspended login</span>
+          <span onClick={() => go('suspended')} style={{ cursor: 'pointer', textDecoration: 'underline' }}>Suspended login</span>
         </div>
       </AppShell>
       <Toast message={toast} />
+      <RateSellerDialog open={showRateDialog} onClose={() => setShowRateDialog(false)} onSubmit={submitQuickRating} />
     </>
   );
 }
