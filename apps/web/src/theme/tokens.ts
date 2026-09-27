@@ -32,6 +32,27 @@ export const status: Record<ListingStatus, { bg: string; fg: string }> = {
   Cancelled: { bg: '#FDECEF', fg: '#A11B3C' },
 };
 
+// Broader status tint map for Pill (listing/order states plus moderation-case and
+// listing-management states that don't belong on the strict ListingStatus union).
+export const pillStatus: Record<string, { bg: string; fg: string }> = {
+  ...status,
+  Hidden: { bg: '#F2ECEF', fg: '#7A6570' },
+  Active: { bg: '#EAF7EE', fg: '#1E7A44' },
+  // moderation case states (FR 7.3)
+  Pending: { bg: '#FFF3E0', fg: '#9A5B00' },
+  'In review': { bg: '#FFE4EF', fg: '#8E0F45' },
+  Closed: { bg: '#EAF7EE', fg: '#1E7A44' },
+  Dismissed: { bg: '#F2ECEF', fg: '#7A6570' },
+};
+
+export const severity: Record<string, { bg: string; fg: string }> = {
+  High: { bg: '#FDECEF', fg: '#A11B3C' },
+  Medium: { bg: '#FFF3E0', fg: '#9A5B00' },
+  Low: { bg: '#F2ECEF', fg: '#7A6570' },
+};
+
+export const danger = { fg: '#A11B3C', bg: '#FDECEF', line: '#F6C9D3' };
+
 export const font = "'Bai Jamjuree', system-ui, sans-serif";
 
 export const radius = { badge: 6, chip: 9, input: 10, card: 12, shell: 16 };
@@ -59,3 +80,18 @@ export const labelStyle: CSSProperties = {
 
 export const initialsOf = (name = '') =>
   name.split(' ').map((w) => w[0]).slice(0, 2).join('');
+
+export const card: CSSProperties = { border: '1px solid #EFE1E7', borderRadius: 12, background: '#FFFFFF' };
+export const pageTitle: CSSProperties = { font: `700 22px/1.2 ${font}`, letterSpacing: '-.01em' };
+export const pageSub: CSSProperties = { font: `400 13.5px/1.6 ${font}`, color: '#7A6570', marginTop: 5, textWrap: 'pretty' };
+
+export const shortName = (name = '') => {
+  const [a, b] = name.split(' ');
+  return b ? a + ' ' + b[0] + '.' : a;
+};
+
+export const slugify = (s = '') =>
+  s.toLowerCase().trim().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+
+export const clock = (d = new Date()) =>
+  String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0');

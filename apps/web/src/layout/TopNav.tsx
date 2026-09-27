@@ -7,8 +7,11 @@ interface TopNavProps {
   onQueryChange: (value: string) => void;
   onSearch?: () => void;
   orderCount?: number;
+  unreadCount?: number;
   onHome: () => void;
   onWishlist: () => void;
+  onChat?: () => void;
+  onNotifications?: () => void;
   onOrders: () => void;
   onSell: () => void;
   onProfile: () => void;
@@ -17,8 +20,8 @@ interface TopNavProps {
 
 // Desktop app header. Sticky pink bar with search, wishlist, orders, sell, avatar.
 export default function TopNav({
-  query, onQueryChange, onSearch, orderCount = 0,
-  onHome, onWishlist, onOrders, onSell, onProfile, user,
+  query, onQueryChange, onSearch, orderCount = 0, unreadCount = 0,
+  onHome, onWishlist, onChat, onNotifications, onOrders, onSell, onProfile, user,
 }: TopNavProps) {
   const [hoverSearch, setHoverSearch] = useState(false);
 
@@ -67,6 +70,16 @@ export default function TopNav({
 
       <div style={{ display: 'flex', alignItems: 'center', gap: 20, flex: 'none' }}>
         <div onClick={onWishlist} style={navLink}>♥ Wishlist</div>
+        {onChat && <div onClick={onChat} style={navLink}>Chat</div>}
+        {onNotifications && (
+          <div onClick={onNotifications} style={navLink}>
+            Alerts{' '}
+            <span style={{
+              display: 'inline-block', minWidth: 16, padding: '1px 4px', borderRadius: 9,
+              background: color.white, color: color.pink, font: `700 10.5px/1.4 ${font}`, textAlign: 'center',
+            }}>{unreadCount}</span>
+          </div>
+        )}
         <div onClick={onOrders} style={navLink}>
           Orders{' '}
           <span style={{

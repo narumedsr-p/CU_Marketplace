@@ -25,7 +25,7 @@ export default function SellScreen({
   const set = (patch: Partial<SellForm>) => onChange({ ...form, ...patch });
 
   return (
-    <div style={{ padding: '22px 24px 40px', maxWidth: 960 }}>
+    <div style={{ padding: '22px 24px 40px' }}>
       <div style={{ font: `700 22px/1.2 ${font}`, letterSpacing: '-.01em' }}>Post a listing</div>
       <div style={{ font: `400 13.5px/1.6 ${font}`, color: color.muted, marginTop: 6 }}>
         Target: under 5 minutes end to end. Photos, price, condition and category are required.
