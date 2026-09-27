@@ -1,16 +1,30 @@
 import type { ReactNode } from 'react';
 import { Route, Routes } from 'react-router-dom';
+import ListingDetailRoute, { type ListingDetailRouteProps } from './routes/listings/ListingDetailRoute';
+import ListingsRoute, { type ListingsRouteProps } from './routes/listings/ListingsRoute';
 import OrderDetailRoute from './routes/orders/OrderDetailRoute';
 import OrdersRoute, { type OrderRouteProps } from './routes/orders/OrdersRoute';
 
 interface AppRouterProps {
   currentScreen: ReactNode;
+  listingDetailRouteProps: ListingDetailRouteProps;
+  listingsRouteProps: ListingsRouteProps;
   orderRouteProps: OrderRouteProps;
 }
 
-export default function AppRouter({ currentScreen, orderRouteProps }: AppRouterProps) {
+export default function AppRouter({
+  currentScreen,
+  listingDetailRouteProps,
+  listingsRouteProps,
+  orderRouteProps,
+}: AppRouterProps) {
   return (
     <Routes>
+      <Route path="/listings" element={<ListingsRoute {...listingsRouteProps} />} />
+      <Route
+        path="/listings/:listingId"
+        element={<ListingDetailRoute {...listingDetailRouteProps} />}
+      />
       <Route path="/orders" element={<OrdersRoute {...orderRouteProps} />} />
       <Route
         path="/orders/:orderId"

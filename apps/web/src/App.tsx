@@ -11,8 +11,6 @@ import useCatalogFilters from './hooks/useCatalogFilters';
 
 import LoginScreen from './screens/LoginScreen';
 import CatalogScreen from './screens/CatalogScreen';
-import BrowseScreen from './screens/BrowseScreen';
-import ListingScreen from './screens/ListingScreen';
 import SellScreen from './screens/SellScreen';
 import ProfileScreen from './screens/ProfileScreen';
 import AdminCategoriesScreen from './screens/AdminCategoriesScreen';
@@ -23,7 +21,7 @@ import {
 } from './data/mockListings';
 import type { Listing, NotificationPrefsState, Order, SellForm } from './types';
 
-type Screen = 'login' | 'home' | 'browse' | 'listing' | 'sell' | 'profile' | 'admin';
+type Screen = 'login' | 'home' | 'sell' | 'profile' | 'admin';
 
 const EMPTY_FORM: SellForm = {
   title: '', price: '', cat: 'Electronics', cond: 'Like new', desc: '', spot: 'Sala Phra Kiao',
@@ -59,18 +57,21 @@ export default function App() {
     navigate('/');
   };
 
-  const openListing = (l: Listing) => { setSelectedId(l.id); setScreen('listing'); };
+  const openListing = (listing: Listing) => {
+    setSelectedId(listing.id);
+    navigate(`/listings/${listing.id}`);
+  };
 
-  const placeOrder = () => {
-    if (selected.status !== 'Available') {
+  const placeOrder = (listing: Listing) => {
+    if (listing.status !== 'Available') {
       flash('This item was just reserved by another buyer.');
       return;
     }
-    setListings((ls) => ls.map((l) => (l.id === selected.id ? { ...l, status: 'Reserved' as const } : l)));
+    setListings((ls) => ls.map((l) => (l.id === listing.id ? { ...l, status: 'Reserved' as const } : l)));
     const newOrder: Order = {
-      reference: 'ORD-2609-0148', handoverCode: 'RSA-4K7Q-2X', listingId: selected.id,
-      title: selected.title, price: selected.price, seller: selected.seller,
-      faculty: selected.faculty ?? '', spot: selected.spot,
+      reference: 'ORD-2609-0148', handoverCode: 'RSA-4K7Q-2X', listingId: listing.id,
+      title: listing.title, price: listing.price, seller: listing.seller,
+      faculty: listing.faculty ?? '', spot: listing.spot,
       window: 'Today 17:00–19:00', placedAt: 'Today 14:22', status: 'Reserved', rated: false,
     };
     setOrder(newOrder);
@@ -130,6 +131,38 @@ export default function App() {
     onBrowse: () => openScreen('home'),
   };
 
+  const listingsRouteProps = {
+    results,
+    filters,
+    onFilterChange: setFilters,
+    categories: CATEGORIES,
+    conditions: CONDITIONS,
+    faculties: FACULTIES,
+    counts,
+    totalCount: listings.length,
+    query,
+    onOpenListing: openListing,
+    onReset: reset,
+  };
+
+  const getListingScreenProps = (listing: Listing) => ({
+    listing,
+    wished,
+    onPlaceOrder: () => placeOrder(listing),
+    onChat: () => flash('Chat opened with ' + listing.seller + '.'),
+    onToggleWishlist: () => {
+      setWished((value) => !value);
+      flash(wished ? 'Removed from wishlist' : 'Added to wishlist');
+    },
+    onViewSeller: () => {
+      setSelectedId(listing.id);
+      setProfileOf(listing.seller);
+      openScreen('profile');
+    },
+    onReport: () => flash('Report submitted — case created as Pending.'),
+    onBlock: () => flash(listing.seller + ' blocked.'),
+  });
+
   const currentScreen = (
     <>
       {screen === 'home' && (
@@ -137,29 +170,8 @@ export default function App() {
           listings={listings.filter((l) => l.status !== 'Sold').slice(0, 10)}
           categories={CATEGORIES}
           onOpenListing={openListing}
-          onPickCategory={(c) => { setFilters({ ...filters, cat: c }); setQuery(''); setScreen('browse'); }}
-          onSeeAll={() => setScreen('browse')}
-        />
-      )}
-
-      {screen === 'browse' && (
-        <BrowseScreen
-          results={results} filters={filters} onFilterChange={setFilters}
-          categories={CATEGORIES} conditions={CONDITIONS} faculties={FACULTIES}
-          counts={counts} totalCount={listings.length} query={query}
-          onOpenListing={openListing} onReset={reset}
-        />
-      )}
-
-      {screen === 'listing' && (
-        <ListingScreen
-          listing={selected} wished={wished}
-          onPlaceOrder={placeOrder}
-          onChat={() => flash('Chat opened with ' + selected.seller + '.')}
-          onToggleWishlist={() => { setWished((w) => !w); flash(wished ? 'Removed from wishlist' : 'Added to wishlist'); }}
-          onViewSeller={() => { setProfileOf(selected.seller); setScreen('profile'); }}
-          onReport={() => flash('Report submitted — case created as Pending.')}
-          onBlock={() => flash(selected.seller + ' blocked.')}
+          onPickCategory={(c) => { setFilters({ ...filters, cat: c }); setQuery(''); navigate('/listings'); }}
+          onSeeAll={() => navigate('/listings')}
         />
       )}
 
@@ -217,7 +229,7 @@ export default function App() {
           user={CURRENT_USER}
           query={query}
           onQueryChange={setQuery}
-          onSearch={() => openScreen('browse')}
+          onSearch={() => navigate('/listings')}
           orderCount={order ? 1 : 0}
           onHome={() => openScreen('home')}
           onWishlist={() => flash('Wishlist — saved listings and auto-match keywords.')}
@@ -226,7 +238,12 @@ export default function App() {
           onProfile={() => { setProfileOf(null); openScreen('profile'); }}
         />
 
-        <AppRouter currentScreen={currentScreen} orderRouteProps={orderRouteProps} />
+        <AppRouter
+          currentScreen={currentScreen}
+          listingDetailRouteProps={{ listings, getScreenProps: getListingScreenProps }}
+          listingsRouteProps={listingsRouteProps}
+          orderRouteProps={orderRouteProps}
+        />
       </AppShell>
 
       <RateSellerDialog
