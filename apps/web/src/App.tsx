@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import GlobalStyles from './theme/GlobalStyles';
 import AppShell from './layout/AppShell';
 import TopNav from './layout/TopNav';
@@ -34,6 +35,7 @@ const EMPTY_FORM: SellForm = {
  * every screen is a pure presentational component driven by props.
  */
 export default function App() {
+  const navigate = useNavigate();
   const [screen, setScreen] = useState<Screen>('login');
   const [listings, setListings] = useState<Listing[]>(LISTINGS);
   const [query, setQuery] = useState('');
@@ -61,13 +63,14 @@ export default function App() {
       return;
     }
     setListings((ls) => ls.map((l) => (l.id === selected.id ? { ...l, status: 'Reserved' as const } : l)));
-    setOrder({
+    const newOrder: Order = {
       reference: 'ORD-2609-0148', handoverCode: 'RSA-4K7Q-2X', listingId: selected.id,
       title: selected.title, price: selected.price, seller: selected.seller,
       faculty: selected.faculty ?? '', spot: selected.spot,
       window: 'Today 17:00–19:00', placedAt: 'Today 14:22', status: 'Reserved', rated: false,
-    });
-    setScreen('order');
+    };
+    setOrder(newOrder);
+    navigate(`/orders/${newOrder.reference}`);
     flash('Item reserved. Seller notified in chat.');
   };
 
@@ -84,6 +87,7 @@ export default function App() {
     setListings((ls) => ls.map((l) => (l.id === order.listingId ? { ...l, status: 'Available' as const } : l)));
     setOrder(null);
     setScreen('home');
+    navigate('/');
     flash('Order cancelled. Item is Available again.');
   };
 
@@ -120,7 +124,7 @@ export default function App() {
     onChat: () => order && flash('Chat opened with ' + order.seller + '.'),
     onCancel: cancelOrder,
     onRate: () => setRateOpen(true),
-    onBrowse: () => setScreen('home'),
+    onBrowse: () => { setScreen('home'); navigate('/'); },
   };
 
   const currentScreen = (
@@ -216,7 +220,7 @@ export default function App() {
           orderCount={order ? 1 : 0}
           onHome={() => setScreen('home')}
           onWishlist={() => flash('Wishlist — saved listings and auto-match keywords.')}
-          onOrders={() => setScreen('order')}
+          onOrders={() => navigate('/orders')}
           onSell={() => setScreen('sell')}
           onProfile={() => { setProfileOf(null); setScreen('profile'); }}
         />
