@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react';
 import GlobalStyles from './theme/GlobalStyles';
 import AppShell from './layout/AppShell';
 import TopNav from './layout/TopNav';
+import AppRouter from './router';
 import Toast from './components/Toast';
 import RateSellerDialog from './components/RateSellerDialog';
 import useToast from './hooks/useToast';
@@ -113,6 +114,96 @@ export default function App() {
   const viewingSelf = profileOf === null;
   const sellerListings = listings.filter((l) => l.seller === profileOf);
 
+  const orderRouteProps = {
+    order,
+    onScanQr: scanQr,
+    onChat: () => order && flash('Chat opened with ' + order.seller + '.'),
+    onCancel: cancelOrder,
+    onRate: () => setRateOpen(true),
+    onBrowse: () => setScreen('home'),
+  };
+
+  const currentScreen = (
+    <>
+      {screen === 'home' && (
+        <CatalogScreen
+          listings={listings.filter((l) => l.status !== 'Sold').slice(0, 10)}
+          categories={CATEGORIES}
+          onOpenListing={openListing}
+          onPickCategory={(c) => { setFilters({ ...filters, cat: c }); setQuery(''); setScreen('browse'); }}
+          onSeeAll={() => setScreen('browse')}
+        />
+      )}
+
+      {screen === 'browse' && (
+        <BrowseScreen
+          results={results} filters={filters} onFilterChange={setFilters}
+          categories={CATEGORIES} conditions={CONDITIONS} faculties={FACULTIES}
+          counts={counts} totalCount={listings.length} query={query}
+          onOpenListing={openListing} onReset={reset}
+        />
+      )}
+
+      {screen === 'listing' && (
+        <ListingScreen
+          listing={selected} wished={wished}
+          onPlaceOrder={placeOrder}
+          onChat={() => flash('Chat opened with ' + selected.seller + '.')}
+          onToggleWishlist={() => { setWished((w) => !w); flash(wished ? 'Removed from wishlist' : 'Added to wishlist'); }}
+          onViewSeller={() => { setProfileOf(selected.seller); setScreen('profile'); }}
+          onReport={() => flash('Report submitted — case created as Pending.')}
+          onBlock={() => flash(selected.seller + ' blocked.')}
+        />
+      )}
+
+      {screen === 'sell' && (
+        <SellScreen
+          form={form} onChange={setForm} onPublish={publish}
+          categories={CATEGORIES} conditions={CONDITIONS} spots={SPOTS}
+          onAddPhoto={() => flash('Photo picker — max 6, 5MB each.')}
+        />
+      )}
+
+      {screen === 'order' && <OrderScreen {...orderRouteProps} />}
+
+      {screen === 'profile' && (
+        <ProfileScreen
+          isSelf={viewingSelf}
+          user={viewingSelf ? CURRENT_USER : {
+            name: profileOf ?? '', memberType: 'Student',
+            faculty: selected.faculty ?? '', since: selected.since,
+          }}
+          stats={viewingSelf
+            ? [['SELLER RATING', '4.8★'], ['HANDOVERS', '13'], ['ITEMS BOUGHT', String(PURCHASES.length)], ['AVG REPLY', '12 min']]
+            : [['SELLER RATING', selected.rating + '★'], ['HANDOVERS', selected.handovers], ['REVIEWS', selected.reviewCount], ['AVG REPLY', selected.replyTime]]}
+          listings={viewingSelf ? listings.slice(0, 4) : sellerListings}
+          purchases={PURCHASES}
+          reviews={REVIEWS}
+          prefs={prefs}
+          notificationPrefs={NOTIFICATION_PREFS}
+          onTogglePref={(k) => setPrefs((p) => ({ ...p, [k]: !p[k] }))}
+          onEditProfile={() => flash('Editable: photo, contact, bio. Name and faculty come from the directory.')}
+          onWishlist={() => flash('Wishlist — saved listings and auto-match keywords.')}
+          onSell={() => setScreen('sell')}
+          onChat={() => flash('Chat opened with ' + profileOf + '.')}
+          onReport={() => flash('Report submitted.')}
+          onOpenListing={openListing}
+        />
+      )}
+
+      {screen === 'admin' && (
+        <AdminCategoriesScreen
+          categories={CATEGORIES.map((c) => ({
+            id: c, name: c, slug: c.toLowerCase(), count: counts[c] || 0,
+          }))}
+          onNew={() => flash('New category — name, slug, parent.')}
+          onMerge={() => flash('Select two or more categories to merge.')}
+          onEdit={(c) => flash('Edit ' + c.name + ' — rename, re-slug, or merge.')}
+        />
+      )}
+    </>
+  );
+
   return (
     <>
       <GlobalStyles />
@@ -130,91 +221,7 @@ export default function App() {
           onProfile={() => { setProfileOf(null); setScreen('profile'); }}
         />
 
-        {screen === 'home' && (
-          <CatalogScreen
-            listings={listings.filter((l) => l.status !== 'Sold').slice(0, 10)}
-            categories={CATEGORIES}
-            onOpenListing={openListing}
-            onPickCategory={(c) => { setFilters({ ...filters, cat: c }); setQuery(''); setScreen('browse'); }}
-            onSeeAll={() => setScreen('browse')}
-          />
-        )}
-
-        {screen === 'browse' && (
-          <BrowseScreen
-            results={results} filters={filters} onFilterChange={setFilters}
-            categories={CATEGORIES} conditions={CONDITIONS} faculties={FACULTIES}
-            counts={counts} totalCount={listings.length} query={query}
-            onOpenListing={openListing} onReset={reset}
-          />
-        )}
-
-        {screen === 'listing' && (
-          <ListingScreen
-            listing={selected} wished={wished}
-            onPlaceOrder={placeOrder}
-            onChat={() => flash('Chat opened with ' + selected.seller + '.')}
-            onToggleWishlist={() => { setWished((w) => !w); flash(wished ? 'Removed from wishlist' : 'Added to wishlist'); }}
-            onViewSeller={() => { setProfileOf(selected.seller); setScreen('profile'); }}
-            onReport={() => flash('Report submitted — case created as Pending.')}
-            onBlock={() => flash(selected.seller + ' blocked.')}
-          />
-        )}
-
-        {screen === 'sell' && (
-          <SellScreen
-            form={form} onChange={setForm} onPublish={publish}
-            categories={CATEGORIES} conditions={CONDITIONS} spots={SPOTS}
-            onAddPhoto={() => flash('Photo picker — max 6, 5MB each.')}
-          />
-        )}
-
-        {screen === 'order' && (
-          <OrderScreen
-            order={order}
-            onScanQr={scanQr}
-            onChat={() => order && flash('Chat opened with ' + order.seller + '.')}
-            onCancel={cancelOrder}
-            onRate={() => setRateOpen(true)}
-            onBrowse={() => setScreen('home')}
-          />
-        )}
-
-        {screen === 'profile' && (
-          <ProfileScreen
-            isSelf={viewingSelf}
-            user={viewingSelf ? CURRENT_USER : {
-              name: profileOf ?? '', memberType: 'Student',
-              faculty: selected.faculty ?? '', since: selected.since,
-            }}
-            stats={viewingSelf
-              ? [['SELLER RATING', '4.8★'], ['HANDOVERS', '13'], ['ITEMS BOUGHT', String(PURCHASES.length)], ['AVG REPLY', '12 min']]
-              : [['SELLER RATING', selected.rating + '★'], ['HANDOVERS', selected.handovers], ['REVIEWS', selected.reviewCount], ['AVG REPLY', selected.replyTime]]}
-            listings={viewingSelf ? listings.slice(0, 4) : sellerListings}
-            purchases={PURCHASES}
-            reviews={REVIEWS}
-            prefs={prefs}
-            notificationPrefs={NOTIFICATION_PREFS}
-            onTogglePref={(k) => setPrefs((p) => ({ ...p, [k]: !p[k] }))}
-            onEditProfile={() => flash('Editable: photo, contact, bio. Name and faculty come from the directory.')}
-            onWishlist={() => flash('Wishlist — saved listings and auto-match keywords.')}
-            onSell={() => setScreen('sell')}
-            onChat={() => flash('Chat opened with ' + profileOf + '.')}
-            onReport={() => flash('Report submitted.')}
-            onOpenListing={openListing}
-          />
-        )}
-
-        {screen === 'admin' && (
-          <AdminCategoriesScreen
-            categories={CATEGORIES.map((c) => ({
-              id: c, name: c, slug: c.toLowerCase(), count: counts[c] || 0,
-            }))}
-            onNew={() => flash('New category — name, slug, parent.')}
-            onMerge={() => flash('Select two or more categories to merge.')}
-            onEdit={(c) => flash('Edit ' + c.name + ' — rename, re-slug, or merge.')}
-          />
-        )}
+        <AppRouter currentScreen={currentScreen} orderRouteProps={orderRouteProps} />
       </AppShell>
 
       <RateSellerDialog
