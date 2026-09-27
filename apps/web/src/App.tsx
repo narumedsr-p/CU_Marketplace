@@ -170,7 +170,7 @@ export default function App() {
           listings={listings.filter((l) => l.status !== 'Sold').slice(0, 10)}
           categories={CATEGORIES}
           onOpenListing={openListing}
-          onPickCategory={(c) => { setFilters({ ...filters, cat: c }); setQuery(''); navigate('/listings'); }}
+          onPickCategory={(c) => { setQuery(''); navigate(`/listings?category=${encodeURIComponent(c)}`); }}
           onSeeAll={() => navigate('/listings')}
         />
       )}
