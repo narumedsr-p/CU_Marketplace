@@ -40,7 +40,7 @@ export default function ReportScreen({
     : type === 'Order' ? 'Attach this order’s history and chat log' : 'Attach our chat history with ' + target.target;
 
   return (
-    <div style={{ padding: '22px 24px 40px', maxWidth: 728 }}>
+    <div style={{ padding: '22px 24px 40px' }}>
       <div style={pageTitle}>Report a problem</div>
       <div style={pageSub}>Reports go to Trust &amp; Safety as a trackable case. The person you report isn't told who filed it.</div>
 

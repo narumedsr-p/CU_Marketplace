@@ -39,7 +39,7 @@ export default function AccountScreen({
   const head = { ...labelStyle, padding: '13px 16px', borderBottom: '1px solid ' + color.lineSoft };
 
   return (
-    <div style={{ padding: '22px 24px 40px', maxWidth: 1008 }}>
+    <div style={{ padding: '22px 24px 40px' }}>
       <div style={pageTitle}>Account</div>
       <div style={pageSub}>Your profile, reports you've filed, people you've blocked, and your session.</div>
 

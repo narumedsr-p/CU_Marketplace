@@ -51,7 +51,7 @@ export default function MyListingsScreen({
   };
 
   return (
-    <div style={{ padding: '22px 24px 40px', maxWidth: 1008 }}>
+    <div style={{ padding: '22px 24px 40px' }}>
       <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: 14, flexWrap: 'wrap' }}>
         <div>
           <div style={pageTitle}>My listings</div>

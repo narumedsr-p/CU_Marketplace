@@ -37,7 +37,7 @@ export default function ReviewScreen({
   const shownStars = stars ?? 0;
 
   return (
-    <div style={{ padding: '22px 24px 40px', maxWidth: 948 }}>
+    <div style={{ padding: '22px 24px 40px' }}>
       <div style={pageTitle}>Rate the seller</div>
       <div style={pageSub}>One review per completed order. It's public on the seller's profile.</div>
 
