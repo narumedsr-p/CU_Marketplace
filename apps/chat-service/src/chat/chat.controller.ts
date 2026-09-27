@@ -16,14 +16,14 @@ export class ChatController {
 
   @ApiOperation({ summary: 'startChat()' })
   @Post()
-  startChat(@Body() body: any) {
-    return this.chatService.createRoom(body);
+  startChat(@Body() body: any, @CurrentUser() user?: UserClaims) {
+    return this.chatService.createRoom(body, user?.userId, user?.role);
   }
 
   @ApiOperation({ summary: 'getChatHistory()' })
   @Get(':roomId/messages')
-  getChatHistory(@Param('roomId') roomId: string) {
-    return this.chatService.findMessages(roomId);
+  getChatHistory(@Param('roomId') roomId: string, @CurrentUser() user?: UserClaims) {
+    return this.chatService.findMessages(roomId, user?.userId, user?.role);
   }
 
   @ApiOperation({ summary: 'sendMessage()' })

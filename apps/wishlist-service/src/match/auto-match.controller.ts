@@ -4,7 +4,7 @@ import { UserClaims } from '@workspace/contracts';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { AutoMatchService } from './auto-match.service';
 
-@Controller('matches')
+@Controller(['matches', ''])
 export class AutoMatchController {
   constructor(private readonly autoMatchService: AutoMatchService) {}
 
@@ -22,20 +22,30 @@ export class AutoMatchController {
 
   @ApiOperation({ summary: 'updateMatchRule()' })
   @Put('rules/:ruleId')
-  updateMatchRule(@Param('ruleId') ruleId: string, @Body() body: any) {
-    return this.autoMatchService.updateRule(ruleId, body);
+  updateMatchRule(
+    @Param('ruleId') ruleId: string,
+    @Body() body: any,
+    @CurrentUser() user: UserClaims,
+  ) {
+    return this.autoMatchService.updateRule(ruleId, body, user?.userId, user?.role);
   }
 
   @ApiOperation({ summary: 'deleteMatchRule()' })
   @Delete('rules/:ruleId')
-  deleteMatchRule(@Param('ruleId') ruleId: string) {
-    return this.autoMatchService.removeRule(ruleId);
+  deleteMatchRule(
+    @Param('ruleId') ruleId: string,
+    @CurrentUser() user: UserClaims,
+  ) {
+    return this.autoMatchService.removeRule(ruleId, user?.userId, user?.role);
   }
 
   @ApiOperation({ summary: 'getMatchRecords()' })
   @Get('rules/:ruleId/records')
-  getMatchRecords(@Param('ruleId') ruleId: string) {
-    return this.autoMatchService.findMatches(ruleId);
+  getMatchRecords(
+    @Param('ruleId') ruleId: string,
+    @CurrentUser() user?: UserClaims,
+  ) {
+    return this.autoMatchService.findMatches(ruleId, user?.userId, user?.role);
   }
 
   @ApiOperation({ summary: 'evaluateAutoMatch() (Internal)' })

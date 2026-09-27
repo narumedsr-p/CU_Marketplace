@@ -4,14 +4,14 @@ import { UserClaims } from '@workspace/contracts';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { ModerationService } from './moderation.service';
 
-@Controller()
+@Controller(['moderation', ''])
 export class ModerationController {
   constructor(private readonly moderationService: ModerationService) {}
 
   @ApiOperation({ summary: 'getAuditLogs()' })
   @Get('audit-logs')
-  getAuditLogs() {
-    return this.moderationService.findAuditLogs();
+  getAuditLogs(@CurrentUser() user?: UserClaims) {
+    return this.moderationService.findAuditLogs(user?.role);
   }
 
   @ApiOperation({ summary: 'blockUser()' })
