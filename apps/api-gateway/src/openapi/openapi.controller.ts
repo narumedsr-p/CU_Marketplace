@@ -94,7 +94,8 @@ export class OpenApiController {
         title: 'CU_Marketplace API (combined)',
         version: '1.0',
         description:
-          'Merged OpenAPI spec aggregated from all downstream services via the API Gateway.',
+          'Merged OpenAPI spec aggregated from all downstream services via the API Gateway. ' +
+          'For internal service-to-service gRPC APIs, see /api/v1/docs-grpc.',
       },
       paths,
       components: { schemas },
