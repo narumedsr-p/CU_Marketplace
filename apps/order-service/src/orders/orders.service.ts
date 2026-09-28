@@ -67,6 +67,12 @@ export class OrdersService {
 
   async create(data: any) {
     const item = await this.catalogClient.getListing(data.itemId);
+    if (!item) {
+      throw new NotFoundException("Item not found");
+    }
+    if (item.sellerId === data.buyerId) {
+      throw new ForbiddenException("You cannot order your own listing");
+    }
     const order = await this.prisma.order.create({
       data: {
         itemId: data.itemId,
