@@ -2,13 +2,14 @@ import { All, Controller, Req, Res } from '@nestjs/common';
 import { HttpService } from '@nestjs/axios';
 import { Request, Response } from 'express';
 import { firstValueFrom } from 'rxjs';
+import { getServiceHttpUrl } from '@workspace/contracts';
 
 // cancelPendingOrders/verifyOrderCompletion moved to gRPC (see libs/contracts/proto/order.proto)
 // and no longer exist over HTTP, so there's nothing left here to block.
 
 @Controller('api/v1/orders')
 export class OrderProxyController {
-  private readonly baseUrl = process.env.ORDER_SERVICE_URL || 'http://localhost:3002';
+  private readonly baseUrl = getServiceHttpUrl('order');
   private readonly prefix = '/api/v1/orders';
 
   constructor(private readonly httpService: HttpService) {}

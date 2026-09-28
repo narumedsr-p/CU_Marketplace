@@ -5,6 +5,7 @@ import { ReviewsController } from './reviews.controller';
 import { ReviewsService } from './reviews.service';
 import { OrderClient } from '../clients/order.client';
 import { NotificationClient } from '../clients/notification.client';
+import { getServiceGrpcUrl } from '@workspace/contracts';
 
 @Module({
   imports: [
@@ -15,7 +16,7 @@ import { NotificationClient } from '../clients/notification.client';
         options: {
           package: 'order',
           protoPath: join(__dirname, '../../../libs/contracts/proto/order.proto'),
-          url: process.env.ORDER_GRPC_URL || 'localhost:4002',
+          url: getServiceGrpcUrl('order'),
         },
       },
       {
@@ -24,7 +25,7 @@ import { NotificationClient } from '../clients/notification.client';
         options: {
           package: 'notification',
           protoPath: join(__dirname, '../../../libs/contracts/proto/notification.proto'),
-          url: process.env.NOTIFICATION_GRPC_URL || 'localhost:4007',
+          url: getServiceGrpcUrl('notification'),
         },
       },
     ]),

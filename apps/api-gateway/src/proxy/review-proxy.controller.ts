@@ -2,10 +2,11 @@ import { All, Controller, Req, Res } from '@nestjs/common';
 import { HttpService } from '@nestjs/axios';
 import { Request, Response } from 'express';
 import { firstValueFrom } from 'rxjs';
+import { getServiceHttpUrl } from '@workspace/contracts';
 
 @Controller('api/v1/reviews')
 export class ReviewProxyController {
-  private readonly baseUrl = process.env.REVIEW_SERVICE_URL || 'http://localhost:3005';
+  private readonly baseUrl = getServiceHttpUrl('review');
   private readonly prefix = '/api/v1/reviews';
 
   constructor(private readonly httpService: HttpService) {}

@@ -2,12 +2,11 @@ import { ForbiddenException, Injectable, ServiceUnavailableException } from '@ne
 import { JwtService } from '@nestjs/jwt';
 import { HttpService } from '@nestjs/axios';
 import { firstValueFrom } from 'rxjs';
-import { UserClaims } from '@workspace/contracts';
+import { UserClaims, getServiceHttpUrl } from '@workspace/contracts';
 
 @Injectable()
 export class AuthService {
-  private readonly moderationServiceUrl =
-    process.env.MODERATION_SERVICE_URL || 'http://localhost:3006';
+  private readonly moderationServiceUrl = getServiceHttpUrl('moderation');
 
   constructor(
     private readonly jwtService: JwtService,

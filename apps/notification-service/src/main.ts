@@ -1,10 +1,16 @@
-import 'dotenv/config';
+import { config } from 'dotenv';
 import { join } from 'path';
 import { NestFactory } from '@nestjs/core';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import { Transport, MicroserviceOptions } from '@nestjs/microservices';
+import { SERVICE_PORTS } from '@workspace/contracts';
 import { apiReference } from '@scalar/nestjs-api-reference';
 import { AppModule } from './app.module';
+
+// Shared secrets (e.g. INTERNAL_SERVICE_SECRET) live in the repo-root .env so they aren't
+// duplicated per service; this service's own .env still supplies its local overrides.
+config({ path: join(__dirname, '../../../.env') });
+config();
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
@@ -19,11 +25,11 @@ async function bootstrap() {
     options: {
       package: 'notification',
       protoPath: join(__dirname, '../../../libs/contracts/proto/notification.proto'),
-      url: `0.0.0.0:${process.env.GRPC_PORT ?? 4007}`,
+      url: `0.0.0.0:${process.env.GRPC_PORT ?? SERVICE_PORTS.notification.grpc}`,
     },
   });
   await app.startAllMicroservices();
 
-  await app.listen(process.env.PORT ?? 3007);
+  await app.listen(process.env.PORT ?? SERVICE_PORTS.notification.http);
 }
 bootstrap();
