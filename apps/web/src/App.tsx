@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Routes, Route, Navigate, useLocation, useNavigate, useParams } from 'react-router-dom';
 import GlobalStyles from './theme/GlobalStyles';
 import AppShell from './layout/AppShell';
@@ -8,11 +8,12 @@ import RateSellerDialog from './components/RateSellerDialog';
 import useToast from './hooks/useToast';
 import useCatalogFilters from './hooks/useCatalogFilters';
 import { signIn, signOut } from './api/auth';
-import { getCurrentUserId, getToken, onUnauthorized } from './api/client';
+import { getCurrentClaims, getCurrentUserId, getToken, onUnauthorized } from './api/client';
 import {
   createListing, deleteListing, fetchCategories, fetchListing, fetchListings, updateListing,
   type ApiCategory,
 } from './api/catalog';
+import { fetchMyProfile, fetchProfile, toUser, updateMyProfile, type ApiProfile } from './api/profiles';
 import { cancelOrder as apiCancelOrder, fetchMyOrders, placeOrder as apiPlaceOrder } from './api/orders';
 
 import LoginScreen from './screens/LoginScreen';
@@ -39,14 +40,14 @@ import SellerProfileRoute from './routes/profile/SellerProfileRoute';
 
 import {
   CONDITIONS, FACULTIES, SPOTS,
-  CURRENT_USER, PURCHASES, REVIEWS, NOTIFICATION_PREFS,
-  ACCOUNT_USER, ACCOUNT_PROFILE, SESSIONS, BLOCKED_USERS, NOTIFICATIONS,
+  REVIEWS, NOTIFICATION_PREFS,
+  SESSIONS, BLOCKED_USERS, NOTIFICATIONS,
   THREADS, RESERVATIONS, AUTO_MATCH_ALERTS, MODERATION_CASES, AUDIT_LOG, MY_REPORTS,
 } from './data/mockListings';
 import type {
-  AccountProfile, AutoMatchAlert, BlockedUser, ChatThread, ChatThreadListing,
+  AccountProfile, AutoMatchAlert, BlockedUser, ChatThread, ChatThreadListing, CurrentUser,
   HandoverOrder, HandoverStage, Listing, ModerationCase, NotificationItem,
-  NotificationPrefsState, Order, ReportTarget, SellForm, SellerReservation, Suspension,
+  NotificationPrefsState, Order, Purchase, ReportTarget, SellForm, SellerReservation, Suspension,
 } from './types';
 
 const EMPTY_FORM: SellForm = {
@@ -104,7 +105,7 @@ function ListingRoute({
         setWishIds((w) => (on ? w.filter((x) => x !== listing.id) : [...w, listing.id]));
         flash(on ? 'Removed from wishlist' : 'Added to wishlist');
       }}
-      onViewSeller={() => navigate('/profile/' + encodeURIComponent(listing.seller))}
+      onViewSeller={() => { if (listing.sellerId) navigate('/profile/' + listing.sellerId); }}
       onReport={() => openReport({ type: 'Listing', title: listing.title, target: listing.seller })}
       onBlock={() => { setBlocked((b) => [...b, { name: listing.seller, since: 'today' }]); flash(listing.seller + ' blocked.'); }}
     />
@@ -129,7 +130,7 @@ export default function App() {
   const [order, setOrder] = useState<Order | null>(null);
   const [orders, setOrders] = useState<Order[]>([]);
   const [wishIds, setWishIds] = useState<string[]>(['10000000-0000-0000-0000-000000000003', '10000000-0000-0000-0000-000000000005']);
-  const [profileOf, setProfileOf] = useState<string | null>(null);
+  const [me, setMe] = useState<ApiProfile | null>(null);
   const [prefs, setPrefs] = useState<NotificationPrefsState>({ chat: true, wishlist: true, order: true, promo: false });
   const [form, setForm] = useState<SellForm>(EMPTY_FORM);
   const [rateOpen, setRateOpen] = useState(false);
@@ -147,7 +148,7 @@ export default function App() {
   const [cases, setCases] = useState<ModerationCase[]>(MODERATION_CASES);
   const [reservations, setReservations] = useState<Record<string, SellerReservation>>(RESERVATIONS);
   const [alerts, setAlerts] = useState<AutoMatchAlert[]>(AUTO_MATCH_ALERTS);
-  const [profile, setProfile] = useState<AccountProfile>(ACCOUNT_PROFILE);
+  const [profile, setProfile] = useState<AccountProfile>({ bio: '', contact: '' });
 
   const { toast, flash } = useToast();
   const { filters, setFilters, results, counts, reset } = useCatalogFilters(listings, query);
@@ -165,6 +166,14 @@ export default function App() {
     if (!loggedIn) return;
     let cancelled = false;
     (async () => {
+      try {
+        const myProfile = await fetchMyProfile();
+        if (cancelled) return;
+        setMe(myProfile);
+        if (myProfile) setProfile((p) => ({ ...p, contact: myProfile.contactInfo }));
+      } catch {
+        if (!cancelled) setMe(null);
+      }
       let cats: ApiCategory[] = [];
       try {
         cats = await fetchCategories();
@@ -211,11 +220,6 @@ export default function App() {
     navigate('/login');
     if (message) flash(message);
   };
-
-  const selected = useMemo(
-    () => listings.find((l) => l.id === selectedId) || listings[0],
-    [listings, selectedId],
-  );
 
   const openListing = (l: Listing | string) => {
     const id = typeof l === 'object' ? l.id : l;
@@ -354,20 +358,25 @@ export default function App() {
   };
 
   const currentUserId = getCurrentUserId();
+  const currentUser: CurrentUser = me
+    ? toUser(me)
+    : { id: currentUserId ?? '', name: '', memberType: 'Student', faculty: '', joined: '' };
   const mine = listings.filter((l) => l.sellerId === currentUserId);
-  const viewingSelf = profileOf === null;
-  const sellerListings = listings.filter((l) => l.seller === profileOf);
+  const purchases: Purchase[] = orders.map((o) => ({
+    id: o.id, title: o.title, price: o.price, seller: o.seller, when: o.placedAt, status: o.status, spot: o.spot,
+    action: o.status === 'Completed' ? 'Rate seller' : o.status === 'Reserved' ? 'In progress' : 'Cancelled',
+  }));
   const savedAll = listings.filter((l) => wishIds.includes(l.id));
 
   const buyerHandover: HandoverOrder | null = order ? {
     reference: order.reference, handoverCode: order.handoverCode, title: order.title,
-    price: order.price, seller: order.seller, buyer: CURRENT_USER.name, spot: order.spot, window: order.window,
+    price: order.price, seller: order.seller, buyer: currentUser.name, spot: order.spot, window: order.window,
   } : null;
   const sellerListing = listings.find((l) => l.id === handover.listingId);
   const sellerRes = handover.listingId !== null ? reservations[handover.listingId] : undefined;
   const sellerHandover: HandoverOrder | null = sellerListing && sellerRes ? {
     reference: sellerRes.reference, handoverCode: 'RSA-SELLER-CODE', title: sellerListing.title,
-    price: sellerListing.price, seller: CURRENT_USER.name, buyer: sellerRes.buyer, spot: sellerRes.spot, window: sellerRes.window,
+    price: sellerListing.price, seller: currentUser.name, buyer: sellerRes.buyer, spot: sellerRes.spot, window: sellerRes.window,
   } : null;
 
   const reviewOrder = order && !order.rated
@@ -410,16 +419,16 @@ export default function App() {
 
   const profileScreenElement = (
     <ProfileScreen
-      isSelf={viewingSelf}
-      user={viewingSelf ? CURRENT_USER : {
-        name: profileOf ?? '', memberType: 'Student',
-        faculty: selected.faculty ?? '', since: selected.since,
-      }}
-      stats={viewingSelf
-        ? [['SELLER RATING', '4.8★'], ['HANDOVERS', '13'], ['ITEMS BOUGHT', String(PURCHASES.length)], ['AVG REPLY', '12 min']]
-        : [['SELLER RATING', selected.rating + '★'], ['HANDOVERS', selected.handovers], ['REVIEWS', selected.reviewCount], ['AVG REPLY', selected.replyTime]]}
-      listings={viewingSelf ? listings.slice(0, 4) : sellerListings}
-      purchases={PURCHASES}
+      isSelf
+      user={currentUser}
+      stats={[
+        ['SELLER RATING', '—'],
+        ['ACTIVE LISTINGS', mine.filter((l) => l.status === 'Available').length],
+        ['ITEMS BOUGHT', orders.filter((o) => o.status === 'Completed').length],
+        ['JOINED', currentUser.joined || '—'],
+      ]}
+      listings={mine}
+      purchases={purchases}
       reviews={REVIEWS}
       prefs={prefs}
       notificationPrefs={NOTIFICATION_PREFS}
@@ -427,8 +436,8 @@ export default function App() {
       onEditProfile={() => navigate('/account')}
       onWishlist={() => navigate('/wishlist')}
       onSell={() => navigate('/sell')}
-      onChat={() => openChat(selected)}
-      onReport={() => openReport({ type: 'User', title: profileOf ?? undefined, target: profileOf ?? '' })}
+      onChat={() => {}}
+      onReport={() => {}}
       onOpenListing={openListing}
     />
   );
@@ -438,7 +447,7 @@ export default function App() {
       <GlobalStyles />
       <AppShell>
         <TopNav
-          user={CURRENT_USER}
+          user={currentUser}
           query={query}
           onQueryChange={setQuery}
           onSearch={() => navigate('/browse')}
@@ -450,7 +459,7 @@ export default function App() {
           onNotifications={() => navigate('/notifications')}
           onOrders={() => navigate('/orders')}
           onSell={() => navigate('/sell')}
-          onProfile={() => { setProfileOf(null); navigate('/profile'); }}
+          onProfile={() => navigate('/profile')}
         />
 
         <Routes>
@@ -532,7 +541,7 @@ export default function App() {
           <Route path="/review" element={(
             <ReviewScreen
               order={reviewOrder}
-              reviewerName={CURRENT_USER.name}
+              reviewerName={currentUser.name}
               sellerStats={baseStats}
               onGoHandover={() => { setHandover((h) => ({ ...h, role: 'buyer' })); navigate('/handover'); }}
               onHome={() => navigate('/')}
@@ -545,10 +554,11 @@ export default function App() {
           )} />
 
           <Route path="/profile" element={profileScreenElement} />
-          <Route path="/profile/:sellerName" element={(
+          <Route path="/profile/:userId" element={(
             <SellerProfileRoute
               listings={listings}
-              purchases={PURCHASES}
+              loadProfile={fetchProfile}
+              purchases={purchases}
               reviews={REVIEWS}
               prefs={prefs}
               notificationPrefs={NOTIFICATION_PREFS}
@@ -575,11 +585,20 @@ export default function App() {
 
           <Route path="/account" element={(
             <AccountScreen
-              user={ACCOUNT_USER} profile={profile} sessions={SESSIONS}
+              user={{ name: currentUser.name, memberType: currentUser.memberType, faculty: currentUser.faculty, email: getCurrentClaims()?.email ?? '' }}
+              profile={profile} sessions={SESSIONS}
               myReports={MY_REPORTS} blocked={blocked}
               listingSummary={`${mine.filter((l) => l.status === 'Available').length} active · ${mine.filter((l) => l.status === 'Reserved').length} reserved · ${mine.filter((l) => l.status === 'Sold').length} sold`}
               openOrderRef={order && order.status === 'Reserved' ? order.reference : null}
-              onSaveProfile={(p) => { setProfile(p); flash('Profile saved.'); }}
+              onSaveProfile={async (p) => {
+                try {
+                  setMe(await updateMyProfile({ contactInfo: p.contact }));
+                  setProfile(p);
+                  flash('Profile saved.');
+                } catch (err) {
+                  flash('Could not save profile: ' + (err instanceof Error ? err.message : 'unknown error'));
+                }
+              }}
               onChangePhoto={() => flash('Photo picker — replaces the directory photo.')}
               onLogout={() => logout('Signed out.')}
               onLogoutAll={() => logout('Signed out on all devices.')}
