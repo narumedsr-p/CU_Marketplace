@@ -36,10 +36,15 @@ function isExpired(token: string): boolean {
   return !payload || (typeof payload.exp === 'number' && payload.exp * 1000 <= Date.now());
 }
 
-export function getCurrentUserId(): string | null {
+export function getCurrentClaims(): { userId: string; email: string; role: string } | null {
   const token = getToken();
-  const userId = token ? decodePayload(token)?.userId : null;
-  return typeof userId === 'string' ? userId : null;
+  const payload = token ? decodePayload(token) : null;
+  if (!payload || typeof payload.userId !== 'string') return null;
+  return { userId: payload.userId, email: String(payload.email ?? ''), role: String(payload.role ?? '') };
+}
+
+export function getCurrentUserId(): string | null {
+  return getCurrentClaims()?.userId ?? null;
 }
 
 let unauthorizedHandler: (() => void) | null = null;

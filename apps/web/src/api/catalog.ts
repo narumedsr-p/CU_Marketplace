@@ -1,4 +1,5 @@
 import { api } from './client';
+import { fetchProfile, memberSince } from './profiles';
 import type { Listing, ListingStatus } from '../types';
 
 export interface ApiCategory {
@@ -18,12 +19,6 @@ interface ApiItem {
   createdAt: string;
 }
 
-interface ApiProfile {
-  userId: string;
-  displayName: string;
-  createdAt: string;
-}
-
 export interface NewListing {
   title: string;
   description: string;
@@ -32,17 +27,6 @@ export interface NewListing {
 }
 
 const CATALOG = '/api/v1/catalog';
-
-const profileCache = new Map<string, Promise<ApiProfile | null>>();
-
-function fetchProfile(userId: string) {
-  let profile = profileCache.get(userId);
-  if (!profile) {
-    profile = api<ApiProfile | null>(`/api/v1/profiles/${userId}`).catch(() => null);
-    profileCache.set(userId, profile);
-  }
-  return profile;
-}
 
 function timeAgo(iso: string) {
   const minutes = Math.floor((Date.now() - new Date(iso).getTime()) / 60000);
@@ -73,7 +57,7 @@ async function toListings(items: ApiItem[], categories: ApiCategory[]): Promise<
       price: Number(item.price),
       cat: categoryName.get(item.categoryId) ?? 'Other',
       seller: profile?.displayName ?? 'CU member',
-      since: profile ? String(new Date(profile.createdAt).getFullYear()) : '—',
+      since: profile ? memberSince(profile) : '—',
       desc: item.description ?? '',
       status: toListingStatus(item.status),
       photo: item.imageUrls[0],
