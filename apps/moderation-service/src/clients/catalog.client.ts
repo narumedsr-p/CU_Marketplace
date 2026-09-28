@@ -1,31 +1,50 @@
-import { Injectable } from '@nestjs/common';
-import { HttpService } from '@nestjs/axios';
-import { firstValueFrom } from 'rxjs';
+import { Inject, Injectable, OnModuleInit } from '@nestjs/common';
+import { ClientGrpc } from '@nestjs/microservices';
+import { Metadata } from '@grpc/grpc-js';
+import { firstValueFrom, Observable } from 'rxjs';
+
+interface ItemResponse {
+  itemId: string;
+  status: string;
+}
+
+interface SuspendAllResponse {
+  suspendedCount: number;
+}
+
+interface CatalogGrpcService {
+  suspendItem(data: { itemId: string }, metadata: Metadata): Observable<ItemResponse>;
+  suspendAllUserItems(
+    data: { sellerId: string },
+    metadata: Metadata,
+  ): Observable<SuspendAllResponse>;
+}
 
 @Injectable()
-export class CatalogClient {
-  private readonly baseUrl = process.env.CATALOG_SERVICE_URL || 'http://localhost:3001';
-  private readonly headers = { 'x-internal-key': process.env.INTERNAL_SERVICE_SECRET };
+export class CatalogClient implements OnModuleInit {
+  private catalogGrpcService!: CatalogGrpcService;
 
-  constructor(private readonly httpService: HttpService) {}
+  constructor(@Inject('CATALOG_PACKAGE') private readonly client: ClientGrpc) {}
+
+  onModuleInit() {
+    this.catalogGrpcService = this.client.getService<CatalogGrpcService>('CatalogService');
+  }
+
+  private grpcMetadata() {
+    const metadata = new Metadata();
+    metadata.set('x-internal-key', process.env.INTERNAL_SERVICE_SECRET ?? '');
+    return metadata;
+  }
 
   async suspendListing(id: string) {
-    const { data } = await firstValueFrom(
-      this.httpService.patch(`${this.baseUrl}/items/${id}/suspend`, undefined, {
-        headers: this.headers,
-        timeout: 5000,
-      }),
+    return firstValueFrom(
+      this.catalogGrpcService.suspendItem({ itemId: id }, this.grpcMetadata()),
     );
-    return data;
   }
 
   async suspendAllUserItems(sellerId: string) {
-    const { data } = await firstValueFrom(
-      this.httpService.patch(`${this.baseUrl}/users/${sellerId}/items/suspend`, undefined, {
-        headers: this.headers,
-        timeout: 5000,
-      }),
+    return firstValueFrom(
+      this.catalogGrpcService.suspendAllUserItems({ sellerId }, this.grpcMetadata()),
     );
-    return data;
   }
 }

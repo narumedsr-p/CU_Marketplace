@@ -194,4 +194,24 @@ export class ChatService {
       data: { isBlocked: true },
     });
   }
+
+  async blockAllUserRooms(userId: string) {
+    const rooms = await this.prisma.chatRoom.findMany({
+      where: {
+        OR: [{ participant1: userId }, { participant2: userId }],
+        isBlocked: false,
+      },
+    });
+
+    let blockedCount = 0;
+    for (const room of rooms) {
+      await this.blockRoom(room.id);
+      await this.sendSystemMessage(
+        room.id,
+        'This conversation has been closed because a participant was banned.',
+      );
+      blockedCount++;
+    }
+    return { blockedCount };
+  }
 }
