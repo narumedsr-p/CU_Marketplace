@@ -2,13 +2,14 @@ import { All, Controller, Req, Res } from '@nestjs/common';
 import { HttpService } from '@nestjs/axios';
 import { Request, Response } from 'express';
 import { firstValueFrom } from 'rxjs';
+import { getServiceHttpUrl } from '@workspace/contracts';
 
 // pushInAppNotification moved to gRPC (see libs/contracts/proto/notification.proto) and no
 // longer exists over HTTP, so there's nothing left here to block.
 
 @Controller('api/v1/notifications')
 export class NotificationProxyController {
-  private readonly baseUrl = process.env.NOTIFICATION_SERVICE_URL || 'http://localhost:3007';
+  private readonly baseUrl = getServiceHttpUrl('notification');
   private readonly prefix = '/api/v1/notifications';
 
   constructor(private readonly httpService: HttpService) {}

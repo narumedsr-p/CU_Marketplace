@@ -2,6 +2,7 @@ import { All, Controller, Req, Res } from '@nestjs/common';
 import { HttpService } from '@nestjs/axios';
 import { Request, Response } from 'express';
 import { firstValueFrom } from 'rxjs';
+import { getServiceHttpUrl } from '@workspace/contracts';
 
 // reserve/unreserve/sold moved to gRPC (order-service <-> catalog-service) and are no
 // longer reachable over HTTP at all, so they don't need blocking here anymore.
@@ -12,8 +13,8 @@ const INTERNAL_ONLY_PATTERNS = [
 
 @Controller('api/v1/catalog')
 export class CatalogProxyController {
-  private readonly baseUrl = process.env.CATALOG_SERVICE_URL || 'http://localhost:3001';
-  private readonly moderationBaseUrl = process.env.MODERATION_SERVICE_URL || 'http://localhost:3006';
+  private readonly baseUrl = getServiceHttpUrl('catalog');
+  private readonly moderationBaseUrl = getServiceHttpUrl('moderation');
   private readonly prefix = '/api/v1/catalog';
 
   constructor(private readonly httpService: HttpService) {}

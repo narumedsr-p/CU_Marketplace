@@ -1,10 +1,11 @@
 import { Injectable } from '@nestjs/common';
 import { HttpService } from '@nestjs/axios';
 import { firstValueFrom } from 'rxjs';
+import { getServiceHttpUrl } from '@workspace/contracts';
 
 @Injectable()
 export class ChatClient {
-  private readonly baseUrl = process.env.CHAT_SERVICE_URL || 'http://localhost:3003';
+  private readonly baseUrl = getServiceHttpUrl('chat');
   private readonly headers = { 'x-internal-key': process.env.INTERNAL_SERVICE_SECRET };
 
   constructor(private readonly httpService: HttpService) {}

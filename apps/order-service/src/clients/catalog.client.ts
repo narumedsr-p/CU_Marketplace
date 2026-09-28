@@ -3,6 +3,7 @@ import { HttpService } from '@nestjs/axios';
 import { ClientGrpc } from '@nestjs/microservices';
 import { Metadata } from '@grpc/grpc-js';
 import { firstValueFrom } from 'rxjs';
+import { getServiceHttpUrl } from '@workspace/contracts';
 
 interface ItemResponse {
   itemId: string;
@@ -17,7 +18,7 @@ interface CatalogGrpcService {
 
 @Injectable()
 export class CatalogClient implements OnModuleInit {
-  private readonly baseUrl = process.env.CATALOG_SERVICE_URL || 'http://localhost:3001';
+  private readonly baseUrl = getServiceHttpUrl('catalog');
   private readonly headers = { 'x-internal-key': process.env.INTERNAL_SERVICE_SECRET };
   private readonly timeout = 5000;
   private catalogGrpcService!: CatalogGrpcService;

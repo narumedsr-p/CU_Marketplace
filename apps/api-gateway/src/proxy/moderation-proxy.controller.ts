@@ -2,12 +2,13 @@ import { All, Controller, Req, Res } from '@nestjs/common';
 import { HttpService } from '@nestjs/axios';
 import { Request, Response } from 'express';
 import { firstValueFrom } from 'rxjs';
+import { getServiceHttpUrl } from '@workspace/contracts';
 
 const INTERNAL_ONLY_PATTERNS = [/^\/banned$/];
 
 @Controller(['api/v1/moderation', 'api/v1/profiles'])
 export class ModerationProxyController {
-  private readonly baseUrl = process.env.MODERATION_SERVICE_URL || 'http://localhost:3006';
+  private readonly baseUrl = getServiceHttpUrl('moderation');
   private readonly prefixes = ['/api/v1/moderation', '/api/v1/profiles'];
 
   constructor(private readonly httpService: HttpService) {}

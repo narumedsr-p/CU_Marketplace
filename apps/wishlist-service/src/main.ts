@@ -1,12 +1,18 @@
-import 'dotenv/config';
+import { config } from 'dotenv';
 import { join } from 'path';
 import { NestFactory } from '@nestjs/core';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import { Transport, MicroserviceOptions } from '@nestjs/microservices';
+import { SERVICE_PORTS } from '@workspace/contracts';
 import { apiReference } from '@scalar/nestjs-api-reference';
 import { AppModule } from './app.module';
 import { WishlistModule } from './wishlist/wishlist.module';
 import { AutoMatchModule } from './match/auto-match.module';
+
+// Shared secrets (e.g. INTERNAL_SERVICE_SECRET) live in the repo-root .env so they aren't
+// duplicated per service; this service's own .env still supplies its local overrides.
+config({ path: join(__dirname, '../../../.env') });
+config();
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
@@ -36,11 +42,11 @@ async function bootstrap() {
     options: {
       package: 'wishlist',
       protoPath: join(__dirname, '../../../libs/contracts/proto/wishlist.proto'),
-      url: `0.0.0.0:${process.env.GRPC_PORT ?? 4004}`,
+      url: `0.0.0.0:${process.env.GRPC_PORT ?? SERVICE_PORTS.wishlist.grpc}`,
     },
   });
   await app.startAllMicroservices();
 
-  await app.listen(process.env.PORT ?? 3004);
+  await app.listen(process.env.PORT ?? SERVICE_PORTS.wishlist.http);
 }
 bootstrap();

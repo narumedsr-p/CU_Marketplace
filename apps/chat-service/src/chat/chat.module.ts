@@ -5,6 +5,7 @@ import { ChatController } from './chat.controller';
 import { ChatGrpcController } from './chat.grpc.controller';
 import { ChatService } from './chat.service';
 import { NotificationClient } from '../clients/notification.client';
+import { getServiceGrpcUrl } from '@workspace/contracts';
 
 @Module({
   imports: [
@@ -15,7 +16,7 @@ import { NotificationClient } from '../clients/notification.client';
         options: {
           package: 'notification',
           protoPath: join(__dirname, '../../../libs/contracts/proto/notification.proto'),
-          url: process.env.NOTIFICATION_GRPC_URL || 'localhost:4007',
+          url: getServiceGrpcUrl('notification'),
         },
       },
     ]),

@@ -1,6 +1,7 @@
 import { Controller, Get } from '@nestjs/common';
 import { HttpService } from '@nestjs/axios';
 import { firstValueFrom } from 'rxjs';
+import { getServiceHttpUrl } from '@workspace/contracts';
 import { Public } from '../common/decorators/public.decorator';
 
 interface ServiceDocEntry {
@@ -17,47 +18,47 @@ export class OpenApiController {
     {
       name: 'Catalog',
       prefix: '/api/v1/catalog',
-      docUrl: `${process.env.CATALOG_SERVICE_URL || 'http://localhost:3001'}/docs-json`,
+      docUrl: `${getServiceHttpUrl('catalog')}/docs-json`,
     },
     {
       name: 'Orders',
       prefix: '/api/v1/orders',
-      docUrl: `${process.env.ORDER_SERVICE_URL || 'http://localhost:3002'}/docs-json`,
+      docUrl: `${getServiceHttpUrl('order')}/docs-json`,
     },
     {
       name: 'Chats',
       prefix: '/api/v1/chats',
-      docUrl: `${process.env.CHAT_SERVICE_URL || 'http://localhost:3003'}/docs-json`,
+      docUrl: `${getServiceHttpUrl('chat')}/docs-json`,
     },
     {
       name: 'Wishlists',
       prefix: '/api/v1/wishlists',
-      docUrl: `${process.env.WISHLIST_SERVICE_URL || 'http://localhost:3004'}/docs-wishlists-json`,
+      docUrl: `${getServiceHttpUrl('wishlist')}/docs-wishlists-json`,
     },
     {
       name: 'Matches',
       prefix: '/api/v1/matches',
-      docUrl: `${process.env.WISHLIST_SERVICE_URL || 'http://localhost:3004'}/docs-matches-json`,
+      docUrl: `${getServiceHttpUrl('wishlist')}/docs-matches-json`,
     },
     {
       name: 'Reviews',
       prefix: '/api/v1/reviews',
-      docUrl: `${process.env.REVIEW_SERVICE_URL || 'http://localhost:3005'}/docs-json`,
+      docUrl: `${getServiceHttpUrl('review')}/docs-json`,
     },
     {
       name: 'Profiles',
       prefix: '/api/v1/profiles',
-      docUrl: `${process.env.MODERATION_SERVICE_URL || 'http://localhost:3006'}/docs-profiles-json`,
+      docUrl: `${getServiceHttpUrl('moderation')}/docs-profiles-json`,
     },
     {
       name: 'Moderation',
       prefix: '/api/v1/moderation',
-      docUrl: `${process.env.MODERATION_SERVICE_URL || 'http://localhost:3006'}/docs-moderation-json`,
+      docUrl: `${getServiceHttpUrl('moderation')}/docs-moderation-json`,
     },
     {
       name: 'Notifications',
       prefix: '/api/v1/notifications',
-      docUrl: `${process.env.NOTIFICATION_SERVICE_URL || 'http://localhost:3007'}/docs-json`,
+      docUrl: `${getServiceHttpUrl('notification')}/docs-json`,
     },
   ];
 

@@ -8,6 +8,7 @@ import { OrdersService } from './orders.service';
 import { CatalogClient } from '../clients/catalog.client';
 import { ChatClient } from '../clients/chat.client';
 import { NotificationClient } from '../clients/notification.client';
+import { getServiceGrpcUrl } from '@workspace/contracts';
 
 @Module({
   imports: [
@@ -22,7 +23,7 @@ import { NotificationClient } from '../clients/notification.client';
           // __dirname here resolves to the service's own dist/ dir at runtime
           // (same depth as apps/<service>/dist/), not this file's source path.
           protoPath: join(__dirname, '../../../libs/contracts/proto/catalog.proto'),
-          url: process.env.CATALOG_GRPC_URL || 'localhost:4001',
+          url: getServiceGrpcUrl('catalog'),
         },
       },
       {
@@ -31,7 +32,7 @@ import { NotificationClient } from '../clients/notification.client';
         options: {
           package: 'notification',
           protoPath: join(__dirname, '../../../libs/contracts/proto/notification.proto'),
-          url: process.env.NOTIFICATION_GRPC_URL || 'localhost:4007',
+          url: getServiceGrpcUrl('notification'),
         },
       },
     ]),

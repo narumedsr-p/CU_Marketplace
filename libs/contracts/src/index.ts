@@ -3,3 +3,5 @@ export interface UserClaims {
   email: string;
   role: string;
 }
+
+export * from './service-registry';

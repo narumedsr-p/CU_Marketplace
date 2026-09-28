@@ -5,6 +5,7 @@ import { ListingsController } from './listings.controller';
 import { ListingsGrpcController } from './listings.grpc.controller';
 import { ListingsService } from './listings.service';
 import { WishlistClient } from '../clients/wishlist.client';
+import { getServiceGrpcUrl } from '@workspace/contracts';
 
 @Module({
   imports: [
@@ -15,7 +16,7 @@ import { WishlistClient } from '../clients/wishlist.client';
         options: {
           package: 'wishlist',
           protoPath: join(__dirname, '../../../libs/contracts/proto/wishlist.proto'),
-          url: process.env.WISHLIST_GRPC_URL || 'localhost:4004',
+          url: getServiceGrpcUrl('wishlist'),
         },
       },
     ]),

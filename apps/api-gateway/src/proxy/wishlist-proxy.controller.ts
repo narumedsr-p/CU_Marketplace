@@ -2,13 +2,14 @@ import { All, Controller, Req, Res } from '@nestjs/common';
 import { HttpService } from '@nestjs/axios';
 import { Request, Response } from 'express';
 import { firstValueFrom } from 'rxjs';
+import { getServiceHttpUrl } from '@workspace/contracts';
 
 // evaluateAutoMatch moved to gRPC (see libs/contracts/proto/wishlist.proto) and no longer
 // exists over HTTP, so there's nothing left here to block.
 
 @Controller(['api/v1/wishlists', 'api/v1/matches'])
 export class WishlistProxyController {
-  private readonly baseUrl = process.env.WISHLIST_SERVICE_URL || 'http://localhost:3004';
+  private readonly baseUrl = getServiceHttpUrl('wishlist');
   private readonly prefixes = ['/api/v1/wishlists', '/api/v1/matches'];
 
   constructor(private readonly httpService: HttpService) {}
