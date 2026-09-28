@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Routes, Route, Navigate, useLocation, useNavigate, useParams } from 'react-router-dom';
 import GlobalStyles from './theme/GlobalStyles';
 import AppShell from './layout/AppShell';
@@ -7,6 +7,8 @@ import Toast from './components/Toast';
 import RateSellerDialog from './components/RateSellerDialog';
 import useToast from './hooks/useToast';
 import useCatalogFilters from './hooks/useCatalogFilters';
+import { signIn, signOut } from './api/auth';
+import { getToken, onUnauthorized } from './api/client';
 
 import LoginScreen from './screens/LoginScreen';
 import CatalogScreen from './screens/CatalogScreen';
@@ -99,7 +101,8 @@ function ListingRoute({
 export default function App() {
   const navigate = useNavigate();
   const location = useLocation();
-  const [loggedIn, setLoggedIn] = useState(false);
+  const [loggedIn, setLoggedIn] = useState(() => getToken() !== null);
+  const [signingIn, setSigningIn] = useState(false);
 
   const [listings, setListings] = useState<Listing[]>(LISTINGS);
   const [query, setQuery] = useState('');
@@ -128,6 +131,35 @@ export default function App() {
 
   const { toast, flash } = useToast();
   const { filters, setFilters, results, counts, reset } = useCatalogFilters(listings, query);
+
+  useEffect(() => {
+    onUnauthorized(() => {
+      setLoggedIn(false);
+      navigate('/login');
+      flash('Your session expired. Please sign in again.');
+    });
+    return () => onUnauthorized(null);
+  }, [navigate, flash]);
+
+  const handleSignIn = async () => {
+    setSigningIn(true);
+    try {
+      await signIn();
+      setLoggedIn(true);
+      if (location.pathname === '/login') navigate('/');
+    } catch (err) {
+      flash('Sign-in failed: ' + (err instanceof Error ? err.message : 'unknown error'));
+    } finally {
+      setSigningIn(false);
+    }
+  };
+
+  const logout = (message?: string) => {
+    signOut();
+    setLoggedIn(false);
+    navigate('/login');
+    if (message) flash(message);
+  };
 
   const selected = useMemo(
     () => listings.find((l) => l.id === selectedId) || listings[0],
@@ -265,7 +297,7 @@ export default function App() {
     return (
       <>
         <GlobalStyles />
-        <SuspendedScreen suspension={DEMO_SUSPENSION} onBack={() => { setLoggedIn(false); navigate('/login'); }} />
+        <SuspendedScreen suspension={DEMO_SUSPENSION} onBack={() => logout()} />
       </>
     );
   }
@@ -275,8 +307,9 @@ export default function App() {
       <>
         <GlobalStyles />
         <AppShell>
-          <LoginScreen onSignIn={() => { setLoggedIn(true); navigate('/'); }} />
+          <LoginScreen onSignIn={handleSignIn} signingIn={signingIn} />
         </AppShell>
+        <Toast message={toast} />
       </>
     );
   }
@@ -453,11 +486,11 @@ export default function App() {
               openOrderRef={order && order.status === 'Reserved' ? order.reference : null}
               onSaveProfile={(p) => { setProfile(p); flash('Profile saved.'); }}
               onChangePhoto={() => flash('Photo picker — replaces the directory photo.')}
-              onLogout={() => { setLoggedIn(false); navigate('/login'); flash('Signed out.'); }}
-              onLogoutAll={() => { setLoggedIn(false); navigate('/login'); flash('Signed out on all devices.'); }}
+              onLogout={() => logout('Signed out.')}
+              onLogoutAll={() => logout('Signed out on all devices.')}
               onUnblock={(name) => { setBlocked((b) => b.filter((x) => x.name !== name)); flash(name + ' unblocked.'); }}
               onMyListings={() => navigate('/mylistings')}
-              onDeleteAccount={() => { setLoggedIn(false); navigate('/login'); flash('Account deletion requested.'); }}
+              onDeleteAccount={() => logout('Account deletion requested.')}
             />
           )} />
 
