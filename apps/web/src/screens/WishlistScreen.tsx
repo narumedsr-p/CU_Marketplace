@@ -27,7 +27,7 @@ interface WishlistScreenProps {
   onEnableNotify: () => void;
   initialTab?: WishlistTab;
   onOpenListing: (listing: Listing) => void;
-  onRemove: (id: number) => void;
+  onRemove: (id: string) => void;
   onBrowse: () => void;
   onCreateAlert: (payload: { text: string; cat: string; max: number }) => void;
   onUpdateAlert: (id: number, payload: { text: string; cat: string; max: number }) => void;
