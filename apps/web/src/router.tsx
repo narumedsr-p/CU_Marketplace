@@ -4,12 +4,16 @@ import ListingDetailRoute, { type ListingDetailRouteProps } from './routes/listi
 import ListingsRoute, { type ListingsRouteProps } from './routes/listings/ListingsRoute';
 import OrderDetailRoute from './routes/orders/OrderDetailRoute';
 import OrdersRoute, { type OrderRouteProps } from './routes/orders/OrdersRoute';
+import ProfileRoute, { type ProfileRouteProps } from './routes/profile/ProfileRoute';
+import SellerProfileRoute, { type SellerProfileRouteProps } from './routes/profile/SellerProfileRoute';
 
 interface AppRouterProps {
   currentScreen: ReactNode;
   listingDetailRouteProps: ListingDetailRouteProps;
   listingsRouteProps: ListingsRouteProps;
   orderRouteProps: OrderRouteProps;
+  profileRouteProps: ProfileRouteProps;
+  sellerProfileRouteProps: SellerProfileRouteProps;
 }
 
 export default function AppRouter({
@@ -17,6 +21,8 @@ export default function AppRouter({
   listingDetailRouteProps,
   listingsRouteProps,
   orderRouteProps,
+  profileRouteProps,
+  sellerProfileRouteProps,
 }: AppRouterProps) {
   return (
     <Routes>
@@ -29,6 +35,11 @@ export default function AppRouter({
       <Route
         path="/orders/:orderId"
         element={<OrderDetailRoute {...orderRouteProps} />}
+      />
+      <Route path="/profile" element={<ProfileRoute {...profileRouteProps} />} />
+      <Route
+        path="/profile/:sellerName"
+        element={<SellerProfileRoute {...sellerProfileRouteProps} />}
       />
       <Route path="*" element={currentScreen} />
     </Routes>

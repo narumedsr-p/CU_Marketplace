@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import GlobalStyles from './theme/GlobalStyles';
 import AppShell from './layout/AppShell';
@@ -12,7 +12,6 @@ import useCatalogFilters from './hooks/useCatalogFilters';
 import LoginScreen from './screens/LoginScreen';
 import CatalogScreen from './screens/CatalogScreen';
 import SellScreen from './screens/SellScreen';
-import ProfileScreen from './screens/ProfileScreen';
 import AdminCategoriesScreen from './screens/AdminCategoriesScreen';
 
 import {
@@ -21,7 +20,7 @@ import {
 } from './data/mockListings';
 import type { Listing, NotificationPrefsState, Order, SellForm } from './types';
 
-type Screen = 'login' | 'home' | 'sell' | 'profile' | 'admin';
+type Screen = 'login' | 'home' | 'sell' | 'admin';
 
 const EMPTY_FORM: SellForm = {
   title: '', price: '', cat: 'Electronics', cond: 'Like new', desc: '', spot: 'Sala Phra Kiao',
@@ -36,10 +35,8 @@ export default function App() {
   const [screen, setScreen] = useState<Screen>('login');
   const [listings, setListings] = useState<Listing[]>(LISTINGS);
   const [query, setQuery] = useState('');
-  const [selectedId, setSelectedId] = useState(1);
   const [order, setOrder] = useState<Order | null>(null);
   const [wished, setWished] = useState(false);
-  const [profileOf, setProfileOf] = useState<string | null>(null); // null = own profile
   const [prefs, setPrefs] = useState<NotificationPrefsState>({ chat: true, wishlist: true, order: true, promo: false });
   const [form, setForm] = useState<SellForm>(EMPTY_FORM);
   const [rateOpen, setRateOpen] = useState(false);
@@ -47,18 +44,12 @@ export default function App() {
   const { toast, flash } = useToast();
   const { filters, setFilters, results, counts, reset } = useCatalogFilters(listings, query);
 
-  const selected = useMemo(
-    () => listings.find((l) => l.id === selectedId) || listings[0],
-    [listings, selectedId],
-  );
-
   const openScreen = (nextScreen: Screen) => {
     setScreen(nextScreen);
     navigate('/');
   };
 
   const openListing = (listing: Listing) => {
-    setSelectedId(listing.id);
     navigate(`/listings/${listing.id}`);
   };
 
@@ -119,9 +110,6 @@ export default function App() {
     );
   }
 
-  const viewingSelf = profileOf === null;
-  const sellerListings = listings.filter((l) => l.seller === profileOf);
-
   const orderRouteProps = {
     order,
     onScanQr: scanQr,
@@ -154,14 +142,39 @@ export default function App() {
       setWished((value) => !value);
       flash(wished ? 'Removed from wishlist' : 'Added to wishlist');
     },
-    onViewSeller: () => {
-      setSelectedId(listing.id);
-      setProfileOf(listing.seller);
-      openScreen('profile');
-    },
+    onViewSeller: () => navigate(`/profile/${encodeURIComponent(listing.seller)}`),
     onReport: () => flash('Report submitted — case created as Pending.'),
     onBlock: () => flash(listing.seller + ' blocked.'),
   });
+
+  const sharedProfileProps = {
+    purchases: PURCHASES,
+    reviews: REVIEWS,
+    prefs,
+    notificationPrefs: NOTIFICATION_PREFS,
+    onTogglePref: (k: string) => setPrefs((p) => ({ ...p, [k]: !p[k] })),
+    onEditProfile: () => flash('Editable: photo, contact, bio. Name and faculty come from the directory.'),
+    onWishlist: () => flash('Wishlist — saved listings and auto-match keywords.'),
+    onSell: () => openScreen('sell'),
+    onReport: () => flash('Report submitted.'),
+    onOpenListing: openListing,
+  };
+
+  const profileRouteProps = {
+    ...sharedProfileProps,
+    user: CURRENT_USER,
+    stats: [
+      ['SELLER RATING', '4.8★'], ['HANDOVERS', '13'], ['ITEMS BOUGHT', String(PURCHASES.length)], ['AVG REPLY', '12 min'],
+    ] as [string, string][],
+    listings: listings.slice(0, 4),
+    onChat: () => {},
+  };
+
+  const sellerProfileRouteProps = {
+    ...sharedProfileProps,
+    listings,
+    onChat: (sellerName: string) => flash('Chat opened with ' + sellerName + '.'),
+  };
 
   const currentScreen = (
     <>
@@ -180,31 +193,6 @@ export default function App() {
           form={form} onChange={setForm} onPublish={publish}
           categories={CATEGORIES} conditions={CONDITIONS} spots={SPOTS}
           onAddPhoto={() => flash('Photo picker — max 6, 5MB each.')}
-        />
-      )}
-
-      {screen === 'profile' && (
-        <ProfileScreen
-          isSelf={viewingSelf}
-          user={viewingSelf ? CURRENT_USER : {
-            name: profileOf ?? '', memberType: 'Student',
-            faculty: selected.faculty ?? '', since: selected.since,
-          }}
-          stats={viewingSelf
-            ? [['SELLER RATING', '4.8★'], ['HANDOVERS', '13'], ['ITEMS BOUGHT', String(PURCHASES.length)], ['AVG REPLY', '12 min']]
-            : [['SELLER RATING', selected.rating + '★'], ['HANDOVERS', selected.handovers], ['REVIEWS', selected.reviewCount], ['AVG REPLY', selected.replyTime]]}
-          listings={viewingSelf ? listings.slice(0, 4) : sellerListings}
-          purchases={PURCHASES}
-          reviews={REVIEWS}
-          prefs={prefs}
-          notificationPrefs={NOTIFICATION_PREFS}
-          onTogglePref={(k) => setPrefs((p) => ({ ...p, [k]: !p[k] }))}
-          onEditProfile={() => flash('Editable: photo, contact, bio. Name and faculty come from the directory.')}
-          onWishlist={() => flash('Wishlist — saved listings and auto-match keywords.')}
-          onSell={() => setScreen('sell')}
-          onChat={() => flash('Chat opened with ' + profileOf + '.')}
-          onReport={() => flash('Report submitted.')}
-          onOpenListing={openListing}
         />
       )}
 
@@ -235,7 +223,7 @@ export default function App() {
           onWishlist={() => flash('Wishlist — saved listings and auto-match keywords.')}
           onOrders={() => navigate('/orders')}
           onSell={() => openScreen('sell')}
-          onProfile={() => { setProfileOf(null); openScreen('profile'); }}
+          onProfile={() => navigate('/profile')}
         />
 
         <AppRouter
@@ -243,6 +231,8 @@ export default function App() {
           listingDetailRouteProps={{ listings, getScreenProps: getListingScreenProps }}
           listingsRouteProps={listingsRouteProps}
           orderRouteProps={orderRouteProps}
+          profileRouteProps={profileRouteProps}
+          sellerProfileRouteProps={sellerProfileRouteProps}
         />
       </AppShell>
 
