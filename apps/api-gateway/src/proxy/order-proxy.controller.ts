@@ -3,7 +3,8 @@ import { HttpService } from '@nestjs/axios';
 import { Request, Response } from 'express';
 import { firstValueFrom } from 'rxjs';
 
-const INTERNAL_ONLY_PATTERNS = [/^\/users\/[^/]+\/orders\/cancel$/, /^\/orders\/[^/]+\/verify$/];
+// cancelPendingOrders/verifyOrderCompletion moved to gRPC (see libs/contracts/proto/order.proto)
+// and no longer exist over HTTP, so there's nothing left here to block.
 
 @Controller('api/v1/orders')
 export class OrderProxyController {
@@ -15,12 +16,6 @@ export class OrderProxyController {
   @All('*')
   async proxy(@Req() req: Request, @Res() res: Response) {
     const path = req.originalUrl.slice(this.prefix.length) || '/';
-    const pathname = path.split('?')[0];
-
-    if (INTERNAL_ONLY_PATTERNS.some((pattern) => pattern.test(pathname))) {
-      res.status(403).json({ message: 'This endpoint is internal-only and cannot be accessed through the gateway.' });
-      return;
-    }
 
     try {
       const response = await firstValueFrom(

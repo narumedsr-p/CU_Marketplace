@@ -1,0 +1,20 @@
+syntax = "proto3";
+
+package wishlist;
+
+service WishlistService {
+  rpc EvaluateItem (ItemPayload) returns (EvaluateResponse);
+}
+
+message ItemPayload {
+  string id = 1;
+  string title = 2;
+  string description = 3;
+  string sellerId = 4;
+  string categoryId = 5;
+}
+
+message EvaluateResponse {
+  bool evaluated = 1;
+  int32 matchedCount = 2;
+}

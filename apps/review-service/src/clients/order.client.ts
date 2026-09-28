@@ -1,21 +1,37 @@
-import { Injectable } from '@nestjs/common';
-import { HttpService } from '@nestjs/axios';
-import { firstValueFrom } from 'rxjs';
+import { Inject, Injectable, OnModuleInit } from '@nestjs/common';
+import { ClientGrpc } from '@nestjs/microservices';
+import { Metadata } from '@grpc/grpc-js';
+import { firstValueFrom, Observable } from 'rxjs';
+
+interface OrderStatusResponse {
+  orderId: string;
+  status: string;
+  buyerId: string;
+  sellerId: string;
+}
+
+interface OrderGrpcService {
+  verifyOrderCompletion(
+    data: { orderId: string },
+    metadata: Metadata,
+  ): Observable<OrderStatusResponse>;
+}
 
 @Injectable()
-export class OrderClient {
-  private readonly baseUrl = process.env.ORDER_SERVICE_URL || 'http://localhost:3002';
-  private readonly headers = { 'x-internal-key': process.env.INTERNAL_SERVICE_SECRET };
+export class OrderClient implements OnModuleInit {
+  private orderGrpcService!: OrderGrpcService;
 
-  constructor(private readonly httpService: HttpService) {}
+  constructor(@Inject('ORDER_PACKAGE') private readonly client: ClientGrpc) {}
+
+  onModuleInit() {
+    this.orderGrpcService = this.client.getService<OrderGrpcService>('OrderService');
+  }
 
   async getOrder(id: string) {
-    const { data } = await firstValueFrom(
-      this.httpService.get(`${this.baseUrl}/orders/${id}/verify`, {
-        headers: this.headers,
-        timeout: 5000,
-      }),
+    const metadata = new Metadata();
+    metadata.set('x-internal-key', process.env.INTERNAL_SERVICE_SECRET ?? '');
+    return firstValueFrom(
+      this.orderGrpcService.verifyOrderCompletion({ orderId: id }, metadata),
     );
-    return data;
   }
 }

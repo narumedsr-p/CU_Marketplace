@@ -1,21 +1,38 @@
-import { Injectable } from '@nestjs/common';
-import { HttpService } from '@nestjs/axios';
-import { firstValueFrom } from 'rxjs';
+import { Inject, Injectable, OnModuleInit } from '@nestjs/common';
+import { ClientGrpc } from '@nestjs/microservices';
+import { Metadata } from '@grpc/grpc-js';
+import { firstValueFrom, Observable } from 'rxjs';
+
+interface ItemPayload {
+  id: string;
+  title: string;
+  description?: string | null;
+  sellerId: string;
+  categoryId: string;
+}
+
+interface EvaluateResponse {
+  evaluated: boolean;
+  matchedCount: number;
+}
+
+interface WishlistGrpcService {
+  evaluateItem(data: ItemPayload, metadata: Metadata): Observable<EvaluateResponse>;
+}
 
 @Injectable()
-export class WishlistClient {
-  private readonly baseUrl = process.env.WISHLIST_SERVICE_URL || 'http://localhost:3004';
-  private readonly headers = { 'x-internal-key': process.env.INTERNAL_SERVICE_SECRET };
+export class WishlistClient implements OnModuleInit {
+  private wishlistGrpcService!: WishlistGrpcService;
 
-  constructor(private readonly httpService: HttpService) {}
+  constructor(@Inject('WISHLIST_PACKAGE') private readonly client: ClientGrpc) {}
 
-  async evaluateItem(item: any) {
-    const { data } = await firstValueFrom(
-      this.httpService.post(`${this.baseUrl}/matches/evaluate`, item, {
-        headers: this.headers,
-        timeout: 5000,
-      }),
-    );
-    return data;
+  onModuleInit() {
+    this.wishlistGrpcService = this.client.getService<WishlistGrpcService>('WishlistService');
+  }
+
+  async evaluateItem(item: ItemPayload) {
+    const metadata = new Metadata();
+    metadata.set('x-internal-key', process.env.INTERNAL_SERVICE_SECRET ?? '');
+    return firstValueFrom(this.wishlistGrpcService.evaluateItem(item, metadata));
   }
 }

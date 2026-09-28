@@ -1,15 +1,11 @@
 import { CanActivate, ExecutionContext, Injectable, UnauthorizedException } from '@nestjs/common';
-import { Request } from 'express';
+import { Metadata } from '@grpc/grpc-js';
 
 @Injectable()
-export class InternalAuthGuard implements CanActivate {
+export class GrpcInternalAuthGuard implements CanActivate {
   canActivate(context: ExecutionContext): boolean {
-    if (context.getType() !== 'http') {
-      // Non-HTTP contexts (e.g. gRPC) are guarded separately — see GrpcInternalAuthGuard.
-      return true;
-    }
-    const request = context.switchToHttp().getRequest<Request>();
-    const key = request.headers['x-internal-key'];
+    const metadata = context.switchToRpc().getContext<Metadata>();
+    const key = metadata.get('x-internal-key')[0];
     const expected = process.env.INTERNAL_SERVICE_SECRET;
 
     if (!expected || key !== expected) {
