@@ -13,6 +13,7 @@ import {
   createListing, deleteListing, fetchCategories, fetchListing, fetchListings, updateListing,
   type ApiCategory,
 } from './api/catalog';
+import { cancelOrder as apiCancelOrder, fetchMyOrders, placeOrder as apiPlaceOrder } from './api/orders';
 
 import LoginScreen from './screens/LoginScreen';
 import CatalogScreen from './screens/CatalogScreen';
@@ -126,6 +127,7 @@ export default function App() {
   const [query, setQuery] = useState('');
   const [selectedId, setSelectedId] = useState('');
   const [order, setOrder] = useState<Order | null>(null);
+  const [orders, setOrders] = useState<Order[]>([]);
   const [wishIds, setWishIds] = useState<string[]>(['10000000-0000-0000-0000-000000000003', '10000000-0000-0000-0000-000000000005']);
   const [profileOf, setProfileOf] = useState<string | null>(null);
   const [prefs, setPrefs] = useState<NotificationPrefsState>({ chat: true, wishlist: true, order: true, promo: false });
@@ -163,8 +165,9 @@ export default function App() {
     if (!loggedIn) return;
     let cancelled = false;
     (async () => {
+      let cats: ApiCategory[] = [];
       try {
-        const cats = await fetchCategories();
+        cats = await fetchCategories();
         const items = await fetchListings(cats);
         if (cancelled) return;
         setCategories(cats);
@@ -173,6 +176,14 @@ export default function App() {
         if (!cancelled) flash('Could not load listings: ' + (err instanceof Error ? err.message : 'unknown error'));
       } finally {
         if (!cancelled) setListingsLoaded(true);
+      }
+      try {
+        const mine = await fetchMyOrders(cats);
+        if (cancelled) return;
+        setOrders(mine);
+        setOrder((current) => current ?? mine.find((o) => o.status === 'Reserved') ?? null);
+      } catch (err) {
+        if (!cancelled) flash('Could not load orders: ' + (err instanceof Error ? err.message : 'unknown error'));
       }
     })();
     return () => { cancelled = true; };
@@ -212,25 +223,32 @@ export default function App() {
     navigate('/listing/' + id);
   };
 
-  const placeOrder = (listing: Listing) => {
+  const placeOrder = async (listing: Listing) => {
+    if (listing.sellerId && listing.sellerId === getCurrentUserId()) { flash('This is your own listing.'); return; }
     if (listing.status !== 'Available') { flash('This item was just reserved by another buyer.'); return; }
-    setListings((ls) => ls.map((l) => (l.id === listing.id ? { ...l, status: 'Reserved' as const } : l)));
-    setOrder({
-      reference: 'ORD-2609-0148', handoverCode: 'RSA-4K7Q-2X', listingId: listing.id,
-      title: listing.title, price: listing.price, seller: listing.seller,
-      faculty: listing.faculty ?? '', spot: listing.spot,
-      window: 'Today 17:00–19:00', placedAt: 'Today 14:22', status: 'Reserved', rated: false,
-    });
-    navigate('/order');
-    flash('Item reserved. Seller notified in chat.');
+    try {
+      const placed = await apiPlaceOrder(listing);
+      setListings((ls) => ls.map((l) => (l.id === listing.id ? { ...l, status: 'Reserved' as const } : l)));
+      setOrders((os) => [placed, ...os]);
+      setOrder(placed);
+      navigate(`/orders/${placed.id}`);
+      flash('Item reserved. Seller notified in chat.');
+    } catch (err) {
+      flash('Could not place order: ' + (err instanceof Error ? err.message : 'unknown error'));
+    }
   };
 
-  const cancelOrder = () => {
-    if (!order) return;
-    setListings((ls) => ls.map((l) => (l.id === order.listingId ? { ...l, status: 'Available' as const } : l)));
-    setOrder(null);
-    navigate('/');
-    flash('Order cancelled. Item is Available again.');
+  const cancelOrder = async (target: Order) => {
+    try {
+      const updated = await apiCancelOrder(target);
+      setListings((ls) => ls.map((l) => (l.id === target.listingId ? { ...l, status: 'Available' as const } : l)));
+      setOrders((os) => os.map((o) => (o.id === target.id ? updated : o)));
+      setOrder((current) => (current?.id === target.id ? null : current));
+      navigate('/orders');
+      flash('Order cancelled. Item is Available again.');
+    } catch (err) {
+      flash('Could not cancel order: ' + (err instanceof Error ? err.message : 'unknown error'));
+    }
   };
 
   const completeBuyerOrder = () => {
@@ -385,7 +403,7 @@ export default function App() {
     order,
     onScanQr: () => { setHandover((h) => ({ ...h, role: 'buyer' as const })); navigate('/handover'); },
     onChat: () => { const l = listings.find((x) => x.id === order?.listingId); if (l) openChat(l); },
-    onCancel: cancelOrder,
+    onCancel: () => { if (order) cancelOrder(order); },
     onRate: () => setRateOpen(true),
     onBrowse: () => navigate('/'),
   };
@@ -424,7 +442,7 @@ export default function App() {
           query={query}
           onQueryChange={setQuery}
           onSearch={() => navigate('/browse')}
-          orderCount={order ? 1 : 0}
+          orderCount={orders.filter((o) => o.status === 'Reserved').length}
           unreadCount={unread}
           onHome={() => navigate('/')}
           onWishlist={() => navigate('/wishlist')}
@@ -474,8 +492,17 @@ export default function App() {
           <Route path="/order" element={(
             <OrderScreen {...orderProps} />
           )} />
-          <Route path="/orders" element={<OrdersRoute {...orderProps} />} />
-          <Route path="/orders/:orderId" element={<OrderDetailRoute {...orderProps} />} />
+          <Route path="/orders" element={<OrdersRoute orders={orders} onBrowse={() => navigate('/browse')} />} />
+          <Route path="/orders/:orderId" element={(
+            <OrderDetailRoute
+              orders={orders}
+              onScanQr={(o) => { setOrder(o); setHandover((h) => ({ ...h, role: 'buyer' as const })); navigate('/handover'); }}
+              onChat={(o) => { const l = listings.find((x) => x.id === o.listingId); if (l) openChat(l); }}
+              onCancel={cancelOrder}
+              onRate={(o) => { setOrder(o); setRateOpen(true); }}
+              onBrowse={() => navigate('/browse')}
+            />
+          )} />
 
           <Route path="/handover" element={(() => {
             const isSeller = handover.role === 'seller' && sellerHandover;
