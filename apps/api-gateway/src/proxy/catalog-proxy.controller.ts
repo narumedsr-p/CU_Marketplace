@@ -3,10 +3,9 @@ import { HttpService } from '@nestjs/axios';
 import { Request, Response } from 'express';
 import { firstValueFrom } from 'rxjs';
 
+// reserve/unreserve/sold moved to gRPC (order-service <-> catalog-service) and are no
+// longer reachable over HTTP at all, so they don't need blocking here anymore.
 const INTERNAL_ONLY_PATTERNS = [
-  /^\/items\/[^/]+\/reserve$/,
-  /^\/items\/[^/]+\/unreserve$/,
-  /^\/items\/[^/]+\/sold$/,
   /^\/items\/[^/]+\/suspend$/,
   /^\/users\/[^/]+\/items\/suspend$/,
 ];
@@ -14,6 +13,7 @@ const INTERNAL_ONLY_PATTERNS = [
 @Controller('api/v1/catalog')
 export class CatalogProxyController {
   private readonly baseUrl = process.env.CATALOG_SERVICE_URL || 'http://localhost:3001';
+  private readonly moderationBaseUrl = process.env.MODERATION_SERVICE_URL || 'http://localhost:3006';
   private readonly prefix = '/api/v1/catalog';
 
   constructor(private readonly httpService: HttpService) {}
@@ -42,14 +42,32 @@ export class CatalogProxyController {
           },
         }),
       );
-      // TODO: hideListingsFromUser() — spec'd as "Gateway fetches the ban blacklist and
-      // hides items from banned sellers in GET /items", but there's no endpoint yet to
-      // fetch that blacklist from moderation-service (see TODO there) and no filtering
-      // is applied to response.data here. Not implemented — see TODO.md item 1.
+
+      if (req.method === 'GET' && pathname === '/items' && Array.isArray(response.data)) {
+        response.data = await this.hideListingsFromBannedSellers(response.data);
+      }
+
       res.status(response.status).json(response.data);
     } catch (error: any) {
       const status = error.response?.status ?? 502;
       res.status(status).json(error.response?.data ?? { message: 'Bad Gateway' });
+    }
+  }
+
+  private async hideListingsFromBannedSellers(items: any[]) {
+    try {
+      const { data: bannedUsers } = await firstValueFrom(
+        this.httpService.get(`${this.moderationBaseUrl}/banned`, {
+          headers: { 'x-internal-key': process.env.INTERNAL_SERVICE_SECRET },
+          timeout: 2000,
+        }),
+      );
+      const bannedIds = new Set<string>(bannedUsers.map((u: any) => u.userId));
+      return items.filter((item) => !bannedIds.has(item.sellerId));
+    } catch {
+      // moderation-service unreachable — fail open and return unfiltered results
+      // rather than breaking search.
+      return items;
     }
   }
 }

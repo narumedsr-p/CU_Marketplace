@@ -3,6 +3,8 @@ import { HttpService } from '@nestjs/axios';
 import { Request, Response } from 'express';
 import { firstValueFrom } from 'rxjs';
 
+const INTERNAL_ONLY_PATTERNS = [/^\/banned$/];
+
 @Controller(['api/v1/moderation', 'api/v1/profiles'])
 export class ModerationProxyController {
   private readonly baseUrl = process.env.MODERATION_SERVICE_URL || 'http://localhost:3006';
@@ -15,6 +17,13 @@ export class ModerationProxyController {
     try {
       const matchedPrefix = this.prefixes.find((prefix) => req.originalUrl.startsWith(prefix));
       const path = matchedPrefix ? req.originalUrl.slice(matchedPrefix.length) || '/' : req.originalUrl;
+      const pathname = path.split('?')[0];
+
+      if (INTERNAL_ONLY_PATTERNS.some((pattern) => pattern.test(pathname))) {
+        res.status(403).json({ message: 'This endpoint is internal-only and cannot be accessed through the gateway.' });
+        return;
+      }
+
       const response = await firstValueFrom(
         this.httpService.request({
           url: `${this.baseUrl}${path}`,
