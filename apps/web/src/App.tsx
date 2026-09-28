@@ -8,7 +8,11 @@ import RateSellerDialog from './components/RateSellerDialog';
 import useToast from './hooks/useToast';
 import useCatalogFilters from './hooks/useCatalogFilters';
 import { signIn, signOut } from './api/auth';
-import { getToken, onUnauthorized } from './api/client';
+import { getCurrentUserId, getToken, onUnauthorized } from './api/client';
+import {
+  createListing, deleteListing, fetchCategories, fetchListing, fetchListings, updateListing,
+  type ApiCategory,
+} from './api/catalog';
 
 import LoginScreen from './screens/LoginScreen';
 import CatalogScreen from './screens/CatalogScreen';
@@ -33,7 +37,7 @@ import OrderDetailRoute from './routes/orders/OrderDetailRoute';
 import SellerProfileRoute from './routes/profile/SellerProfileRoute';
 
 import {
-  LISTINGS, CATEGORIES, CONDITIONS, FACULTIES, SPOTS,
+  CONDITIONS, FACULTIES, SPOTS,
   CURRENT_USER, PURCHASES, REVIEWS, NOTIFICATION_PREFS,
   ACCOUNT_USER, ACCOUNT_PROFILE, SESSIONS, BLOCKED_USERS, NOTIFICATIONS,
   THREADS, RESERVATIONS, AUTO_MATCH_ALERTS, MODERATION_CASES, AUDIT_LOG, MY_REPORTS,
@@ -55,9 +59,11 @@ const DEMO_SUSPENSION: Suspension = {
 
 interface ListingRouteProps {
   listings: Listing[];
-  wishIds: number[];
-  setWishIds: (fn: (ids: number[]) => number[]) => void;
-  setSelectedId: (id: number) => void;
+  loaded: boolean;
+  loadListing: (id: string) => Promise<Listing | null>;
+  wishIds: string[];
+  setWishIds: (fn: (ids: string[]) => string[]) => void;
+  setSelectedId: (id: string) => void;
   placeOrder: (listing: Listing) => void;
   openChat: (listing: Listing) => void;
   openReport: (target: ReportTarget) => void;
@@ -68,14 +74,24 @@ interface ListingRouteProps {
 // Reads :id from the URL and keeps `selectedId` in sync so a direct link / refresh / back
 // button resolves to the right listing.
 function ListingRoute({
-  listings, wishIds, setWishIds, setSelectedId, placeOrder, openChat, openReport, setBlocked, flash,
+  listings, loaded, loadListing, wishIds, setWishIds, setSelectedId, placeOrder, openChat, openReport, setBlocked, flash,
 }: ListingRouteProps) {
-  const { id } = useParams<{ id: string }>();
+  const { id = '' } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const numId = Number(id);
-  useState(() => setSelectedId(numId));
-  const listing = listings.find((l) => l.id === numId);
-  if (!listing) return <Navigate to="/" replace />;
+  useState(() => setSelectedId(id));
+  const inList = listings.find((l) => l.id === id);
+  const [fetched, setFetched] = useState<Listing | null | undefined>(undefined);
+
+  useEffect(() => {
+    if (inList || !loaded) return;
+    setFetched(undefined);
+    loadListing(id).then(setFetched).catch(() => setFetched(null));
+  }, [id, inList, loaded]);
+
+  const listing = inList ?? fetched;
+  if (!listing) {
+    return loaded && fetched === null ? <Navigate to="/" replace /> : null;
+  }
   return (
     <ListingScreen
       listing={listing}
@@ -104,11 +120,13 @@ export default function App() {
   const [loggedIn, setLoggedIn] = useState(() => getToken() !== null);
   const [signingIn, setSigningIn] = useState(false);
 
-  const [listings, setListings] = useState<Listing[]>(LISTINGS);
+  const [listings, setListings] = useState<Listing[]>([]);
+  const [listingsLoaded, setListingsLoaded] = useState(false);
+  const [categories, setCategories] = useState<ApiCategory[]>([]);
   const [query, setQuery] = useState('');
-  const [selectedId, setSelectedId] = useState(1);
+  const [selectedId, setSelectedId] = useState('');
   const [order, setOrder] = useState<Order | null>(null);
-  const [wishIds, setWishIds] = useState<number[]>([3, 5]);
+  const [wishIds, setWishIds] = useState<string[]>(['10000000-0000-0000-0000-000000000003', '10000000-0000-0000-0000-000000000005']);
   const [profileOf, setProfileOf] = useState<string | null>(null);
   const [prefs, setPrefs] = useState<NotificationPrefsState>({ chat: true, wishlist: true, order: true, promo: false });
   const [form, setForm] = useState<SellForm>(EMPTY_FORM);
@@ -116,7 +134,7 @@ export default function App() {
 
   const [reportTarget, setReportTarget] = useState<ReportTarget | null>(null);
   const [handover, setHandover] = useState<{
-    role: 'buyer' | 'seller'; listingId: number | null;
+    role: 'buyer' | 'seller'; listingId: string | null;
     stage: Record<'buyer' | 'seller', HandoverStage>; codeError: boolean;
   }>({ role: 'buyer', listingId: null, stage: { buyer: 'ready', seller: 'ready' }, codeError: false });
 
@@ -125,7 +143,7 @@ export default function App() {
   const [notifications, setNotifications] = useState<NotificationItem[]>(NOTIFICATIONS);
   const [blocked, setBlocked] = useState<BlockedUser[]>(BLOCKED_USERS);
   const [cases, setCases] = useState<ModerationCase[]>(MODERATION_CASES);
-  const [reservations, setReservations] = useState<Record<number, SellerReservation>>(RESERVATIONS);
+  const [reservations, setReservations] = useState<Record<string, SellerReservation>>(RESERVATIONS);
   const [alerts, setAlerts] = useState<AutoMatchAlert[]>(AUTO_MATCH_ALERTS);
   const [profile, setProfile] = useState<AccountProfile>(ACCOUNT_PROFILE);
 
@@ -140,6 +158,28 @@ export default function App() {
     });
     return () => onUnauthorized(null);
   }, [navigate, flash]);
+
+  useEffect(() => {
+    if (!loggedIn) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const cats = await fetchCategories();
+        const items = await fetchListings(cats);
+        if (cancelled) return;
+        setCategories(cats);
+        setListings(items);
+      } catch (err) {
+        if (!cancelled) flash('Could not load listings: ' + (err instanceof Error ? err.message : 'unknown error'));
+      } finally {
+        if (!cancelled) setListingsLoaded(true);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [loggedIn, flash]);
+
+  const categoryNames = categories.map((c) => c.name);
+  const categoryIdOf = (name: string) => categories.find((c) => c.name === name)?.id;
 
   const handleSignIn = async () => {
     setSigningIn(true);
@@ -166,7 +206,7 @@ export default function App() {
     [listings, selectedId],
   );
 
-  const openListing = (l: Listing | number) => {
+  const openListing = (l: Listing | string) => {
     const id = typeof l === 'object' ? l.id : l;
     setSelectedId(id);
     navigate('/listing/' + id);
@@ -202,26 +242,52 @@ export default function App() {
     flash('Handover confirmed. Order closed.');
   };
 
-  const cancelSellerReservation = (id: number) => {
+  const cancelSellerReservation = (id: string) => {
     setListings((ls) => ls.map((l) => (l.id === id ? { ...l, status: 'Available' as const } : l)));
     setReservations((r) => { const n = { ...r }; delete n[id]; return n; });
     flash('Reservation cancelled. The buyer was notified.');
     navigate('/mylistings');
   };
 
-  const publish = () => {
+  const publish = async () => {
     if (!form.title.trim() || !form.price) { flash('Title and price are required.'); return; }
-    const id = Math.max(...listings.map((l) => l.id)) + 1;
-    setListings((ls) => [{
-      id, title: form.title.trim(), price: Number(form.price), was: Math.round(Number(form.price) * 1.6),
-      cat: form.cat, cond: form.cond, faculty: CURRENT_USER.faculty, seller: CURRENT_USER.name,
-      rating: 4.8, reviewCount: 21, sold: 7, watchers: 0, posted: 'just now', status: 'Available' as const,
-      spot: form.spot, handovers: 13, replyTime: '12 min', since: '2025',
-      desc: form.desc.trim() || 'No description provided.',
-    }, ...ls]);
-    setForm(EMPTY_FORM);
-    navigate('/');
-    flash('Published. 3 buyers matched by auto-match keyword.');
+    const categoryId = categoryIdOf(form.cat);
+    if (!categoryId) { flash('Pick a category.'); return; }
+    try {
+      const listing = await createListing({
+        title: form.title.trim(),
+        description: form.desc.trim(),
+        price: Number(form.price),
+        categoryId,
+      }, categories);
+      setListings((ls) => [listing, ...ls]);
+      setForm(EMPTY_FORM);
+      navigate('/listing/' + listing.id);
+      flash('Published.');
+    } catch (err) {
+      flash('Could not publish: ' + (err instanceof Error ? err.message : 'unknown error'));
+    }
+  };
+
+  const saveListing = async (id: string, patch: { title: string; price: number; desc: string }) => {
+    try {
+      const updated = await updateListing(id, { title: patch.title, price: patch.price, description: patch.desc }, categories);
+      setListings((ls) => ls.map((l) => (l.id === id ? updated : l)));
+      flash('Listing updated.');
+    } catch (err) {
+      flash('Could not update: ' + (err instanceof Error ? err.message : 'unknown error'));
+    }
+  };
+
+  const removeListing = async (id: string) => {
+    try {
+      await deleteListing(id);
+      setListings((ls) => ls.filter((l) => l.id !== id));
+      setWishIds((w) => w.filter((x) => x !== id));
+      flash('Listing deleted.');
+    } catch (err) {
+      flash('Could not delete: ' + (err instanceof Error ? err.message : 'unknown error'));
+    }
   };
 
   const openChat = (l: Listing) => {
@@ -263,13 +329,14 @@ export default function App() {
     setNotifications((ns) => ns.map((x) => (x.id === n.id ? { ...x, read: true } : x)));
     const a = n.action;
     if (!a) return;
-    if (a.type === 'listing' && a.id !== undefined) openListing(a.id);
+    if (a.type === 'listing' && a.listingId) openListing(a.listingId);
     else if (a.type === 'chat' && a.id !== undefined) { setActiveThread(a.id); navigate('/chat'); }
     else if (a.type === 'mylistings') navigate('/mylistings');
     else if (a.type === 'account') navigate('/account');
   };
 
-  const mine = listings.filter((l) => l.seller === CURRENT_USER.name);
+  const currentUserId = getCurrentUserId();
+  const mine = listings.filter((l) => l.sellerId === currentUserId);
   const viewingSelf = profileOf === null;
   const sellerListings = listings.filter((l) => l.seller === profileOf);
   const savedAll = listings.filter((l) => wishIds.includes(l.id));
@@ -372,7 +439,7 @@ export default function App() {
           <Route path="/" element={(
             <CatalogScreen
               listings={listings.filter((l) => l.status !== 'Sold').slice(0, 10)}
-              categories={CATEGORIES}
+              categories={categoryNames}
               onOpenListing={openListing}
               onPickCategory={(c) => { setQuery(''); navigate(`/browse?category=${encodeURIComponent(c)}`); }}
               onSeeAll={() => navigate('/browse')}
@@ -382,7 +449,7 @@ export default function App() {
           <Route path="/browse" element={(
             <ListingsRoute
               results={results} filters={filters} onFilterChange={setFilters}
-              categories={CATEGORIES} conditions={CONDITIONS} faculties={FACULTIES}
+              categories={categoryNames} conditions={CONDITIONS} faculties={FACULTIES}
               counts={counts} totalCount={listings.length} query={query}
               onOpenListing={openListing} onReset={reset}
             />
@@ -390,7 +457,8 @@ export default function App() {
 
           <Route path="/listing/:id" element={(
             <ListingRoute
-              listings={listings} wishIds={wishIds} setWishIds={setWishIds} setSelectedId={setSelectedId}
+              listings={listings} loaded={listingsLoaded} loadListing={(id) => fetchListing(id, categories)}
+              wishIds={wishIds} setWishIds={setWishIds} setSelectedId={setSelectedId}
               placeOrder={placeOrder} openChat={openChat} openReport={openReport} setBlocked={setBlocked} flash={flash}
             />
           )} />
@@ -398,7 +466,7 @@ export default function App() {
           <Route path="/sell" element={(
             <SellScreen
               form={form} onChange={setForm} onPublish={publish}
-              categories={CATEGORIES} conditions={CONDITIONS} spots={SPOTS}
+              categories={categoryNames} conditions={CONDITIONS} spots={SPOTS}
               onAddPhoto={() => flash('Photo picker — max 6, 5MB each.')}
             />
           )} />
@@ -426,7 +494,7 @@ export default function App() {
                   setReservations((r) => { const n = { ...r }; if (handover.listingId !== null) delete n[handover.listingId]; return n; });
                   setHandover((h) => ({ ...h, stage: { ...h.stage, seller: 'done' } }));
                 }}
-                onCancelReservation={handover.listingId !== null ? () => cancelSellerReservation(handover.listingId as number) : undefined}
+                onCancelReservation={handover.listingId !== null ? () => cancelSellerReservation(handover.listingId as string) : undefined}
                 onChat={() => navigate('/chat')}
                 onRate={() => navigate('/review')}
                 onHome={() => navigate('/')}
@@ -470,8 +538,8 @@ export default function App() {
           <Route path="/mylistings" element={(
             <MyListingsScreen
               listings={mine} reservations={reservations} conditions={CONDITIONS}
-              onSave={(id, patch) => { setListings((ls) => ls.map((l) => (l.id === id ? { ...l, ...patch } : l))); flash('Listing updated.'); }}
-              onDelete={(id) => { setListings((ls) => ls.filter((l) => l.id !== id)); setWishIds((w) => w.filter((x) => x !== id)); flash('Listing deleted.'); }}
+              onSave={saveListing}
+              onDelete={removeListing}
               onShowQr={(id) => { setHandover((h) => ({ ...h, role: 'seller', listingId: id })); navigate('/handover'); }}
               onCancelReservation={cancelSellerReservation}
               onNew={() => navigate('/sell')}
@@ -498,7 +566,7 @@ export default function App() {
             <WishlistScreen
               saved={savedAll.filter((l) => l.status !== 'Sold')}
               autoRemoved={savedAll.filter((l) => l.status === 'Sold')}
-              alerts={alerts} matches={[]} categories={CATEGORIES}
+              alerts={alerts} matches={[]} categories={categoryNames}
               notifyOn={prefs.wishlist}
               onEnableNotify={() => setPrefs((p) => ({ ...p, wishlist: true }))}
               onOpenListing={openListing}
@@ -559,7 +627,7 @@ export default function App() {
 
           <Route path="/admin" element={(
             <AdminCategoriesScreen
-              categories={CATEGORIES.map((c) => ({
+              categories={categoryNames.map((c) => ({
                 id: c, name: c, slug: c.toLowerCase(), count: counts[c] || 0,
               }))}
               onNew={() => flash('New category — name, slug, parent.')}
