@@ -46,9 +46,11 @@ export default function OrderScreen({
         <StatusBadge status={order.status} />
       </div>
       <div style={{ font: `400 13.5px/1.6 ${font}`, color: color.muted, marginTop: 6 }}>
-        {done
-          ? 'Handover confirmed. You can rate the seller now.'
-          : 'Item is held for you until the pickup window ends. Scan the seller’s QR at handover.'}
+        {order.status === 'Cancelled'
+          ? 'This order was cancelled. The item is available to other buyers again.'
+          : done
+            ? 'Handover confirmed. You can rate the seller now.'
+            : 'Item is held for you until the pickup window ends. Scan the seller’s QR at handover.'}
       </div>
 
       <div style={{
@@ -102,7 +104,7 @@ export default function OrderScreen({
             </div>
           </div>
 
-          {!done ? (
+          {order.status === 'Reserved' ? (
             <>
               <Button full onClick={onScanQr} style={{ marginTop: 13 }}>Scan seller’s QR</Button>
               <Button variant="outline" full onClick={onChat} style={{ marginTop: 9 }}>Chat with seller</Button>
@@ -114,7 +116,7 @@ export default function OrderScreen({
               </div>
             </>
           ) : (
-            !order.rated && <Button variant="ink" full onClick={onRate} style={{ marginTop: 13 }}>Rate the seller</Button>
+            done && !order.rated && <Button variant="ink" full onClick={onRate} style={{ marginTop: 13 }}>Rate the seller</Button>
           )}
         </div>
       </div>

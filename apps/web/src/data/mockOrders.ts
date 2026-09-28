@@ -2,6 +2,7 @@ import type { Order } from '../types';
 
 export const MOCK_ORDERS: Order[] = [
   {
+    id: 'ORD-2609-0142',
     reference: 'ORD-2609-0142',
     handoverCode: 'QSA-8M2P-1R',
     listingId: '10000000-0000-0000-0000-000000000003',
@@ -16,6 +17,7 @@ export const MOCK_ORDERS: Order[] = [
     rated: false,
   },
   {
+    id: 'ORD-2609-0127',
     reference: 'ORD-2609-0127',
     handoverCode: 'BKK-7D4N-9C',
     listingId: '10000000-0000-0000-0000-000000000008',
@@ -31,6 +33,7 @@ export const MOCK_ORDERS: Order[] = [
     rated: true,
   },
   {
+    id: 'ORD-2608-0094',
     reference: 'ORD-2608-0094',
     handoverCode: 'CUV-3A6K-5T',
     listingId: '10000000-0000-0000-0000-000000000007',
@@ -46,6 +49,7 @@ export const MOCK_ORDERS: Order[] = [
     rated: false,
   },
   {
+    id: 'ORD-2608-0081',
     reference: 'ORD-2608-0081',
     handoverCode: 'PKN-2X5J-7L',
     listingId: '10000000-0000-0000-0000-000000000004',

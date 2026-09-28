@@ -69,6 +69,7 @@ export interface NotificationPrefDef {
 export type NotificationPrefsState = Record<string, boolean>;
 
 export interface Order {
+  id: string;
   reference: string;
   handoverCode: string;
   listingId: string;
@@ -79,7 +80,7 @@ export interface Order {
   spot: string;
   window: string;
   placedAt: string;
-  status: 'Reserved' | 'Completed';
+  status: 'Reserved' | 'Completed' | 'Cancelled';
   rated: boolean;
   completedAt?: string;
 }
