@@ -20,6 +20,15 @@ export class ProfilesController {
     return this.profilesService.updateStatus(user.userId, 'Deleted');
   }
 
+  // Must stay before viewProfile()'s ':userId' route — NestJS matches routes in
+  // declaration order, not by specificity, so a param route declared first would
+  // swallow this static path.
+  @ApiOperation({ summary: 'listBannedUsers() (Internal)' })
+  @Get('banned')
+  listBannedUsers() {
+    return this.profilesService.findByStatus('Banned');
+  }
+
   @ApiOperation({ summary: 'viewProfile()' })
   @Get(':userId')
   viewProfile(@Param('userId') userId: string) {
@@ -31,8 +40,4 @@ export class ProfilesController {
   banUser(@Param('userId') userId: string, @CurrentUser() user: UserClaims) {
     return this.profilesService.banUser(userId, user.role);
   }
-
-  // TODO: no endpoint exists yet to list banned users (e.g. GET /profiles?status=Banned).
-  // Needed by the gateway's catalog proxy to implement hideListingsFromUser() — see the
-  // TODO there. Not in the original API spec, so not built — see TODO.md item 1.
 }
