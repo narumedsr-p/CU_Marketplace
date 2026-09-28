@@ -1,21 +1,34 @@
-import { Injectable } from '@nestjs/common';
-import { HttpService } from '@nestjs/axios';
-import { firstValueFrom } from 'rxjs';
+import { Inject, Injectable, OnModuleInit } from '@nestjs/common';
+import { ClientGrpc } from '@nestjs/microservices';
+import { Metadata } from '@grpc/grpc-js';
+import { firstValueFrom, Observable } from 'rxjs';
+
+interface PushResponse {
+  success: boolean;
+  skipped: boolean;
+}
+
+interface NotificationGrpcService {
+  pushNotification(
+    data: { userId: string; title: string; message: string },
+    metadata: Metadata,
+  ): Observable<PushResponse>;
+}
 
 @Injectable()
-export class NotificationClient {
-  private readonly baseUrl = process.env.NOTIFICATION_SERVICE_URL || 'http://localhost:3007';
-  private readonly headers = { 'x-internal-key': process.env.INTERNAL_SERVICE_SECRET };
+export class NotificationClient implements OnModuleInit {
+  private notificationGrpcService!: NotificationGrpcService;
 
-  constructor(private readonly httpService: HttpService) {}
+  constructor(@Inject('NOTIFICATION_PACKAGE') private readonly client: ClientGrpc) {}
 
-  async send(payload: any) {
-    const { data } = await firstValueFrom(
-      this.httpService.post(`${this.baseUrl}/notifications/push`, payload, {
-        headers: this.headers,
-        timeout: 5000,
-      }),
-    );
-    return data;
+  onModuleInit() {
+    this.notificationGrpcService =
+      this.client.getService<NotificationGrpcService>('NotificationService');
+  }
+
+  async send(payload: { userId: string; title: string; message: string }) {
+    const metadata = new Metadata();
+    metadata.set('x-internal-key', process.env.INTERNAL_SERVICE_SECRET ?? '');
+    return firstValueFrom(this.notificationGrpcService.pushNotification(payload, metadata));
   }
 }

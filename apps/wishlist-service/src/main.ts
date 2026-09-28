@@ -1,6 +1,8 @@
 import 'dotenv/config';
+import { join } from 'path';
 import { NestFactory } from '@nestjs/core';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
+import { Transport, MicroserviceOptions } from '@nestjs/microservices';
 import { apiReference } from '@scalar/nestjs-api-reference';
 import { AppModule } from './app.module';
 import { WishlistModule } from './wishlist/wishlist.module';
@@ -28,6 +30,16 @@ async function bootstrap() {
   });
   app.getHttpAdapter().get('/docs-matches-json', (_req, res) => res.json(matchesDoc));
   app.use('/docs-matches', apiReference({ url: '/docs-matches-json' }));
+
+  app.connectMicroservice<MicroserviceOptions>({
+    transport: Transport.GRPC,
+    options: {
+      package: 'wishlist',
+      protoPath: join(__dirname, '../../../libs/contracts/proto/wishlist.proto'),
+      url: `0.0.0.0:${process.env.GRPC_PORT ?? 4004}`,
+    },
+  });
+  await app.startAllMicroservices();
 
   await app.listen(process.env.PORT ?? 3004);
 }

@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Patch, Post } from '@nestjs/common';
+import { Controller, Get, Patch } from '@nestjs/common';
 import { ApiOperation } from '@nestjs/swagger';
 import { UserClaims } from '@workspace/contracts';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
@@ -20,9 +20,5 @@ export class NotificationsController {
     return this.notificationsService.markAllAsRead(user.userId);
   }
 
-  @ApiOperation({ summary: 'pushInAppNotification() (Internal)' })
-  @Post('push')
-  pushInAppNotification(@Body() body: any) {
-    return this.notificationsService.create(body);
-  }
+  // pushInAppNotification moved to gRPC — see notifications.grpc.controller.ts.
 }

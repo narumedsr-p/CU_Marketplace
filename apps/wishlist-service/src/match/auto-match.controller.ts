@@ -48,9 +48,5 @@ export class AutoMatchController {
     return this.autoMatchService.findMatches(ruleId, user?.userId, user?.role);
   }
 
-  @ApiOperation({ summary: 'evaluateAutoMatch() (Internal)' })
-  @Post('evaluate')
-  evaluateAutoMatch(@Body() item: any) {
-    return this.autoMatchService.evaluateItem(item);
-  }
+  // evaluateAutoMatch moved to gRPC — see auto-match.grpc.controller.ts.
 }

@@ -1,0 +1,27 @@
+syntax = "proto3";
+
+package order;
+
+service OrderService {
+  rpc CancelPendingOrders (UserRequest) returns (CancelResponse);
+  rpc VerifyOrderCompletion (OrderRequest) returns (OrderStatusResponse);
+}
+
+message UserRequest {
+  string userId = 1;
+}
+
+message CancelResponse {
+  int32 cancelledCount = 1;
+}
+
+message OrderRequest {
+  string orderId = 1;
+}
+
+message OrderStatusResponse {
+  string orderId = 1;
+  string status = 2;
+  string buyerId = 3;
+  string sellerId = 4;
+}

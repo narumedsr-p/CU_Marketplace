@@ -38,23 +38,7 @@ export class ListingsController {
     return this.listingsService.remove(itemId, user.userId);
   }
 
-  @ApiOperation({ summary: 'reserveItem() (Internal)' })
-  @Patch('items/:itemId/reserve')
-  reserveItem(@Param('itemId') itemId: string) {
-    return this.listingsService.reserve(itemId);
-  }
-
-  @ApiOperation({ summary: 'unreserveItem() (Internal)' })
-  @Patch('items/:itemId/unreserve')
-  unreserveItem(@Param('itemId') itemId: string) {
-    return this.listingsService.unreserve(itemId);
-  }
-
-  @ApiOperation({ summary: 'markItemAsSold() (Internal)' })
-  @Patch('items/:itemId/sold')
-  markItemAsSold(@Param('itemId') itemId: string) {
-    return this.listingsService.markAsSold(itemId);
-  }
+  // reserveItem/unreserveItem/markItemAsSold moved to gRPC — see listings.grpc.controller.ts.
 
   @ApiOperation({ summary: 'suspendItem() (Internal)' })
   @Patch('items/:itemId/suspend')
