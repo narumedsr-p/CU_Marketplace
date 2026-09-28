@@ -23,13 +23,23 @@ export function clearToken() {
   try { localStorage.removeItem(TOKEN_KEY); } catch { }
 }
 
-function isExpired(token: string): boolean {
+function decodePayload(token: string): Record<string, unknown> | null {
   try {
-    const payload = JSON.parse(atob(token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/')));
-    return typeof payload.exp === 'number' && payload.exp * 1000 <= Date.now();
+    return JSON.parse(atob(token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/')));
   } catch {
-    return true;
+    return null;
   }
+}
+
+function isExpired(token: string): boolean {
+  const payload = decodePayload(token);
+  return !payload || (typeof payload.exp === 'number' && payload.exp * 1000 <= Date.now());
+}
+
+export function getCurrentUserId(): string | null {
+  const token = getToken();
+  const userId = token ? decodePayload(token)?.userId : null;
+  return typeof userId === 'string' ? userId : null;
 }
 
 let unauthorizedHandler: (() => void) | null = null;
