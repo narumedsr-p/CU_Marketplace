@@ -4,7 +4,7 @@ import { UserClaims } from '@workspace/contracts';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { WishlistService } from './wishlist.service';
 
-@Controller('wishlists')
+@Controller(['wishlists', ''])
 export class WishlistController {
   constructor(private readonly wishlistService: WishlistService) {}
 
@@ -22,13 +22,20 @@ export class WishlistController {
 
   @ApiOperation({ summary: 'updateWishlist()' })
   @Put(':wishlistId')
-  updateWishlist(@Param('wishlistId') wishlistId: string, @Body() body: any) {
-    return this.wishlistService.update(wishlistId, body);
+  updateWishlist(
+    @Param('wishlistId') wishlistId: string,
+    @Body() body: any,
+    @CurrentUser() user: UserClaims,
+  ) {
+    return this.wishlistService.update(wishlistId, body, user?.userId, user?.role);
   }
 
   @ApiOperation({ summary: 'deleteWishlist()' })
   @Delete(':wishlistId')
-  deleteWishlist(@Param('wishlistId') wishlistId: string) {
-    return this.wishlistService.remove(wishlistId);
+  deleteWishlist(
+    @Param('wishlistId') wishlistId: string,
+    @CurrentUser() user: UserClaims,
+  ) {
+    return this.wishlistService.remove(wishlistId, user?.userId, user?.role);
   }
 }

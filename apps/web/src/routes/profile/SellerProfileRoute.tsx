@@ -1,21 +1,22 @@
+import type { ComponentProps } from 'react';
 import { Navigate, useParams } from 'react-router-dom';
 import ProfileScreen from '../../screens/ProfileScreen';
 import type { Listing } from '../../types';
-import type { ProfileRouteProps } from './ProfileRoute';
 
 export interface SellerProfileRouteProps
-  extends Omit<ProfileRouteProps, 'user' | 'stats' | 'listings' | 'onChat'> {
+  extends Omit<ComponentProps<typeof ProfileScreen>, 'isSelf' | 'user' | 'stats' | 'listings' | 'onChat' | 'onReport'> {
   listings: Listing[];
   onChat: (sellerName: string) => void;
+  onReport: (sellerName: string) => void;
 }
 
-export default function SellerProfileRoute({ listings, onChat, ...props }: SellerProfileRouteProps) {
+export default function SellerProfileRoute({ listings, onChat, onReport, ...props }: SellerProfileRouteProps) {
   const { sellerName } = useParams<{ sellerName: string }>();
   const sellerListings = listings.filter((listing) => listing.seller === sellerName);
   const seller = sellerListings[0];
 
   if (!sellerName || !seller) {
-    return <Navigate to="/listings" replace />;
+    return <Navigate to="/browse" replace />;
   }
 
   return (
@@ -35,6 +36,7 @@ export default function SellerProfileRoute({ listings, onChat, ...props }: Selle
       ]}
       listings={sellerListings}
       onChat={() => onChat(sellerName)}
+      onReport={() => onReport(sellerName)}
     />
   );
 }

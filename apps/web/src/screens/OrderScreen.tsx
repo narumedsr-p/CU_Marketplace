@@ -20,7 +20,7 @@ export default function OrderScreen({
 }: OrderScreenProps) {
   if (!order) {
     return (
-      <div style={{ padding: '22px 24px 40px', maxWidth: 900 }}>
+      <div style={{ padding: '22px 24px 40px' }}>
         <EmptyState
           title="No active orders"
           body="Place an order from any listing to see the reservation and handover flow."
@@ -40,7 +40,7 @@ export default function OrderScreen({
   ];
 
   return (
-    <div style={{ padding: '22px 24px 40px', maxWidth: 900 }}>
+    <div style={{ padding: '22px 24px 40px' }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
         <div style={{ font: `700 22px/1.2 ${font}`, letterSpacing: '-.01em' }}>Order {order.reference}</div>
         <StatusBadge status={order.status} />
