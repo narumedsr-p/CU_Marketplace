@@ -4,7 +4,7 @@ export const MOCK_ORDERS: Order[] = [
   {
     reference: 'ORD-2609-0142',
     handoverCode: 'QSA-8M2P-1R',
-    listingId: 3,
+    listingId: '10000000-0000-0000-0000-000000000003',
     title: 'Calculus I & II textbook bundle + solution manual',
     price: 400,
     seller: 'Narumedsr Pitayachamrat',
@@ -18,7 +18,7 @@ export const MOCK_ORDERS: Order[] = [
   {
     reference: 'ORD-2609-0127',
     handoverCode: 'BKK-7D4N-9C',
-    listingId: 8,
+    listingId: '10000000-0000-0000-0000-000000000008',
     title: 'Casio fx-991EX scientific calculator',
     price: 550,
     seller: 'Kannawich Munsak',
@@ -33,7 +33,7 @@ export const MOCK_ORDERS: Order[] = [
   {
     reference: 'ORD-2608-0094',
     handoverCode: 'CUV-3A6K-5T',
-    listingId: 7,
+    listingId: '10000000-0000-0000-0000-000000000007',
     title: 'Muji mechanical pencil set, 0.3 / 0.5 / 0.7',
     price: 120,
     seller: 'Mint Rojanasakul',
@@ -48,7 +48,7 @@ export const MOCK_ORDERS: Order[] = [
   {
     reference: 'ORD-2608-0081',
     handoverCode: 'PKN-2X5J-7L',
-    listingId: 4,
+    listingId: '10000000-0000-0000-0000-000000000004',
     title: 'Dorm desk lamp, warm white, clip-on',
     price: 180,
     seller: 'Panat Lorchatchawankul',
