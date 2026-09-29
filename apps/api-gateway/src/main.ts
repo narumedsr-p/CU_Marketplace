@@ -1,5 +1,6 @@
 import { config } from 'dotenv';
 import { join } from 'path';
+import cookieParser from 'cookie-parser';
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
 
@@ -10,6 +11,7 @@ config();
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
+  app.use(cookieParser());
 
   // dynamic import: @scalar/nestjs-api-reference's CJS build require()s an
   // ESM-only dependency, which only resolves correctly through import().

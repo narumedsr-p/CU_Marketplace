@@ -1,62 +1,120 @@
-import { ForbiddenException, Injectable, ServiceUnavailableException } from '@nestjs/common';
+import { randomBytes } from 'node:crypto';
+import { Injectable } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { HttpService } from '@nestjs/axios';
+import { OAuth2Client } from 'google-auth-library';
 import { firstValueFrom } from 'rxjs';
 import { UserClaims, getServiceHttpUrl } from '@workspace/contracts';
 
 @Injectable()
 export class AuthService {
-  private readonly moderationServiceUrl = getServiceHttpUrl('moderation');
+  private readonly profileServiceUrl = getServiceHttpUrl('profile');
+  private readonly frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
+  private readonly allowedEmailDomain = process.env.ALLOWED_EMAIL_DOMAIN || 'chula.ac.th';
+  private readonly googleCallbackUrl =
+    process.env.GOOGLE_CALLBACK_URL || 'http://localhost:3000/auth/google/callback';
+  private readonly googleClient = new OAuth2Client(
+    process.env.GOOGLE_CLIENT_ID,
+    process.env.GOOGLE_CLIENT_SECRET,
+    this.googleCallbackUrl,
+  );
 
   constructor(
     private readonly jwtService: JwtService,
     private readonly httpService: HttpService,
   ) {}
 
-  // Almost every service's schema types user-reference columns (sellerId, buyerId,
-  // reviewerId, adminId, etc.) as Postgres `uuid`, so the mock userId must actually be a
-  // valid UUID — a human-readable id like 'student-0001' would fail with "invalid input
-  // syntax for type uuid" the moment it's written to any of those tables (e.g. placing an
-  // order, creating a listing, an admin audit log entry).
-  async issueDummyToken(userId = '00000000-0000-0000-0000-000000000001'): Promise<string> {
-    const profile = await this.getProfile(userId);
-    if (profile?.accountStatus === 'Banned' || profile?.accountStatus === 'Deleted') {
-      throw new ForbiddenException('This account is banned or deleted');
-    }
-
-    // role comes from the persisted profile (defaults to 'Student' if no profile exists
-    // yet) so admin-gated endpoints can actually be enforced — previously this was
-    // hardcoded to 'student' for everyone, making a real admin check impossible.
-    const claims: UserClaims = {
-      userId,
-      email: `${userId}@cu.edu`,
-      role: profile?.role ?? 'Student',
-    };
-
-    return this.jwtService.sign(claims);
+  // Step 1 of the real login flow: build Google's consent-screen URL. `state` is
+  // returned to the controller to store in an httpOnly cookie and re-checked in
+  // handleGoogleCallback() as CSRF protection (Google just echoes it back verbatim).
+  buildGoogleAuthUrl(): { url: string; state: string } {
+    const state = randomBytes(16).toString('hex');
+    const params = new URLSearchParams({
+      client_id: process.env.GOOGLE_CLIENT_ID ?? '',
+      redirect_uri: this.googleCallbackUrl,
+      response_type: 'code',
+      scope: 'openid email profile',
+      // `hd` is only a UX hint (pre-fills/nudges the account picker) — Google warns it's
+      // not a security guarantee, so the actual email suffix is re-checked below.
+      hd: this.allowedEmailDomain,
+      state,
+      prompt: 'select_account',
+    });
+    return { url: `https://accounts.google.com/o/oauth2/v2/auth?${params.toString()}`, state };
   }
 
-  private async getProfile(
-    userId: string,
-  ): Promise<{ accountStatus: string; role: string } | null> {
-    try {
-      // Calling moderation-service directly (not through the gateway's own proxy), so this
-      // must match its native route — ProfilesController is mounted at root (`/:userId`),
-      // not `/profiles/:userId` (that prefix only exists because the gateway's proxy
-      // strips `/api/v1/profiles` before forwarding). Using the wrong path here silently
-      // 404s forever, which is what was happening before this fix.
-      const { data } = await firstValueFrom(
-        this.httpService.get(`${this.moderationServiceUrl}/${userId}`, {
-          timeout: 1000,
-          headers: { 'x-internal-key': process.env.INTERNAL_SERVICE_SECRET },
-        }),
-      );
-      return data ?? null;
-    } catch (error: any) {
-      if (error.response?.status === 404) {
-        return null;
-      }
-      throw new ServiceUnavailableException('Unable to verify account status right now');
+  // Step 2: exchange the code, verify the id_token's signature, enforce the domain
+  // restriction, and mint the JWT. Returns a URL rather than throwing, since the caller
+  // must always end in a browser redirect (success or error).
+  async handleGoogleCallback(
+    code: string | undefined,
+    state: string | undefined,
+    cookieState: string | undefined,
+  ): Promise<string> {
+    if (!code || !state || !cookieState || state !== cookieState) {
+      return `${this.frontendUrl}/?error=invalid_state`;
     }
+
+    let email: string | undefined;
+    let emailVerified: boolean | undefined;
+    let name: string | undefined;
+    let picture: string | undefined;
+    try {
+      const { tokens } = await this.googleClient.getToken(code);
+      const ticket = await this.googleClient.verifyIdToken({
+        idToken: tokens.id_token!,
+        audience: process.env.GOOGLE_CLIENT_ID,
+      });
+      const payload = ticket.getPayload();
+      email = payload?.email;
+      emailVerified = payload?.email_verified;
+      name = payload?.name;
+      picture = payload?.picture;
+    } catch {
+      return `${this.frontendUrl}/?error=google_auth_failed`;
+    }
+
+    if (!email || !emailVerified || !this.isAllowedDomain(email)) {
+      return `${this.frontendUrl}/?error=domain_not_allowed`;
+    }
+
+    let profile: { userId: string; accountStatus: string; role: string };
+    try {
+      profile = await this.findOrCreateProfileByEmail(email, name ?? email, picture ?? '');
+    } catch {
+      return `${this.frontendUrl}/?error=service_unavailable`;
+    }
+
+    if (profile.accountStatus === 'Deleted') {
+      return `${this.frontendUrl}/?error=account_deleted`;
+    }
+
+    const claims: UserClaims = { userId: profile.userId, email, role: profile.role ?? 'Student' };
+    const token = this.jwtService.sign(claims);
+    return `${this.frontendUrl}/?token=${token}`;
+  }
+
+  // Accepts the bare domain (student@chula.ac.th) and any subdomain of it
+  // (student@student.chula.ac.th, staff@alumni.chula.ac.th, ...), matched on the actual
+  // domain segment after '@' with a '.' boundary — not a raw string suffix, since
+  // `endsWith('@' + domain)` would also wrongly accept a spoofed 'x@evilchula.ac.th'.
+  private isAllowedDomain(email: string): boolean {
+    const domain = email.toLowerCase().split('@').pop() ?? '';
+    return domain === this.allowedEmailDomain || domain.endsWith(`.${this.allowedEmailDomain}`);
+  }
+
+  private async findOrCreateProfileByEmail(
+    email: string,
+    displayName: string,
+    avatarUrl: string,
+  ): Promise<{ userId: string; accountStatus: string; role: string }> {
+    const { data } = await firstValueFrom(
+      this.httpService.post(
+        `${this.profileServiceUrl}/oauth-login`,
+        { email, displayName, avatarUrl },
+        { timeout: 2000, headers: { 'x-internal-key': process.env.INTERNAL_SERVICE_SECRET } },
+      ),
+    );
+    return data;
   }
 }
