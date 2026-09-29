@@ -25,7 +25,7 @@ export const SERVICE_PORTS: Record<ServiceName, ServicePorts> = {
   wishlist: { http: 3004, grpc: 4004 },
   review: { http: 3005 },
   profile: { http: 3006, grpc: 4006 },
-  notification: { http: 3007, grpc: 4007 },
+  notification: { http: 3007 },
 };
 
 function hostFor(service: ServiceName): string {
@@ -43,3 +43,11 @@ export function getServiceGrpcUrl(service: ServiceName): string {
   }
   return `${hostFor(service)}:${port}`;
 }
+
+export function getRabbitMqUrl(): string {
+  return process.env.RABBITMQ_URL ?? 'amqp://localhost:5672';
+}
+
+export const QUEUES = {
+  notification: 'notification_queue',
+} as const;

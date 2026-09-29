@@ -5,7 +5,8 @@ import { Request } from 'express';
 export class InternalAuthGuard implements CanActivate {
   canActivate(context: ExecutionContext): boolean {
     if (context.getType() !== 'http') {
-      // Non-HTTP contexts (e.g. gRPC) are guarded separately — see GrpcInternalAuthGuard.
+      // Non-HTTP contexts (e.g. the RMQ notification consumer) rely on RabbitMQ
+      // network access being restricted to internal services, not this guard.
       return true;
     }
     const request = context.switchToHttp().getRequest<Request>();

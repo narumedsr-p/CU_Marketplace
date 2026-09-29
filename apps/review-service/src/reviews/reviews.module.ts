@@ -5,7 +5,7 @@ import { ReviewsController } from './reviews.controller';
 import { ReviewsService } from './reviews.service';
 import { OrderClient } from '../clients/order.client';
 import { NotificationClient } from '../clients/notification.client';
-import { getServiceGrpcUrl } from '@workspace/contracts';
+import { getServiceGrpcUrl, getRabbitMqUrl, QUEUES } from '@workspace/contracts';
 
 @Module({
   imports: [
@@ -21,11 +21,11 @@ import { getServiceGrpcUrl } from '@workspace/contracts';
       },
       {
         name: 'NOTIFICATION_PACKAGE',
-        transport: Transport.GRPC,
+        transport: Transport.RMQ,
         options: {
-          package: 'notification',
-          protoPath: join(__dirname, '../../../libs/contracts/proto/notification.proto'),
-          url: getServiceGrpcUrl('notification'),
+          urls: [getRabbitMqUrl()],
+          queue: QUEUES.notification,
+          queueOptions: { durable: true },
         },
       },
     ]),
