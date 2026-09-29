@@ -8,12 +8,7 @@ import { OrdersService } from './orders.service';
 import { CatalogClient } from '../clients/catalog.client';
 import { ChatClient } from '../clients/chat.client';
 import { NotificationClient } from '../clients/notification.client';
-import {
-  getServiceGrpcUrl,
-  getRabbitMqUrl,
-  getCatalogItemStatusQueueOptions,
-  QUEUES,
-} from '@workspace/contracts';
+import { getServiceGrpcUrl, getRabbitMqUrl, getRetryableQueueOptions, QUEUES } from '@workspace/contracts';
 
 @Module({
   imports: [
@@ -46,7 +41,7 @@ import {
         options: {
           urls: [getRabbitMqUrl()],
           queue: QUEUES.catalogItemStatus,
-          queueOptions: getCatalogItemStatusQueueOptions(),
+          queueOptions: getRetryableQueueOptions(QUEUES.catalogItemStatusRetry),
         },
       },
     ]),

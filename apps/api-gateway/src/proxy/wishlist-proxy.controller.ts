@@ -4,8 +4,8 @@ import { Request, Response } from 'express';
 import { firstValueFrom } from 'rxjs';
 import { getServiceHttpUrl } from '@workspace/contracts';
 
-// evaluateAutoMatch moved to gRPC (see libs/contracts/proto/wishlist.proto) and no longer
-// exists over HTTP, so there's nothing left here to block.
+// evaluateAutoMatch is now triggered by catalog-service publishing onto RabbitMQ directly
+// and no longer exists over HTTP, so there's nothing left here to block.
 
 @Controller(['api/v1/wishlists', 'api/v1/matches'])
 export class WishlistProxyController {

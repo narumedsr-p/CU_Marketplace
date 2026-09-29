@@ -1,7 +1,5 @@
-import { Inject, Injectable, OnModuleInit } from '@nestjs/common';
-import { ClientGrpc } from '@nestjs/microservices';
-import { Metadata } from '@grpc/grpc-js';
-import { firstValueFrom, Observable } from 'rxjs';
+import { Inject, Injectable } from '@nestjs/common';
+import { ClientProxy } from '@nestjs/microservices';
 
 interface ItemPayload {
   id: string;
@@ -11,28 +9,19 @@ interface ItemPayload {
   categoryId: string;
 }
 
-interface EvaluateResponse {
-  evaluated: boolean;
-  matchedCount: number;
-}
-
-interface WishlistGrpcService {
-  evaluateItem(data: ItemPayload, metadata: Metadata): Observable<EvaluateResponse>;
-}
-
 @Injectable()
-export class WishlistClient implements OnModuleInit {
-  private wishlistGrpcService!: WishlistGrpcService;
+export class WishlistClient {
+  constructor(@Inject('WISHLIST_PACKAGE') private readonly client: ClientProxy) {}
 
-  constructor(@Inject('WISHLIST_PACKAGE') private readonly client: ClientGrpc) {}
-
-  onModuleInit() {
-    this.wishlistGrpcService = this.client.getService<WishlistGrpcService>('WishlistService');
-  }
-
-  async evaluateItem(item: ItemPayload) {
-    const metadata = new Metadata();
-    metadata.set('x-internal-key', process.env.INTERNAL_SERVICE_SECRET ?? '');
-    return firstValueFrom(this.wishlistGrpcService.evaluateItem(item, metadata));
+  evaluateItem(item: ItemPayload) {
+    // Only forward the fields the auto-match evaluator actually reads — the full Prisma
+    // row also carries a Decimal `price` and other fields with no place in this contract.
+    this.client.emit('catalog.item.created', {
+      id: item.id,
+      title: item.title,
+      description: item.description,
+      sellerId: item.sellerId,
+      categoryId: item.categoryId,
+    });
   }
 }

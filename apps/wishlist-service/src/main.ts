@@ -1,10 +1,11 @@
 import { config } from 'dotenv';
 import { expand } from 'dotenv-expand';
 import { join } from 'path';
+import { connect } from 'amqp-connection-manager';
 import { NestFactory } from '@nestjs/core';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import { Transport, MicroserviceOptions } from '@nestjs/microservices';
-import { SERVICE_PORTS } from '@workspace/contracts';
+import { SERVICE_PORTS, QUEUES, getRabbitMqUrl, getRetryableQueueOptions } from '@workspace/contracts';
 import { apiReference } from '@scalar/nestjs-api-reference';
 import { AppModule } from './app.module';
 import { WishlistModule } from './wishlist/wishlist.module';
@@ -38,12 +39,34 @@ async function bootstrap() {
   app.getHttpAdapter().get('/docs-matches-json', (_req, res) => res.json(matchesDoc));
   app.use('/docs-matches', apiReference({ url: '/docs-matches-json' }));
 
+  // The retry and DLQ queues have no NestJS @EventPattern consumer of their own — the
+  // retry queue is a pure TTL delay buffer and the DLQ is an inspection-only sink — so
+  // nothing else asserts them into existence. Do it here before the main queue starts
+  // consuming, since a nacked message needs both to already exist.
+  const rabbitConnection = connect([getRabbitMqUrl()]);
+  const topologyChannel = rabbitConnection.createChannel({
+    setup: (channel: import('amqplib').ConfirmChannel) =>
+      Promise.all([
+        channel.assertQueue(QUEUES.wishlistEvaluateRetry, {
+          durable: true,
+          arguments: {
+            'x-message-ttl': 10000,
+            'x-dead-letter-exchange': '',
+            'x-dead-letter-routing-key': QUEUES.wishlistEvaluate,
+          },
+        }),
+        channel.assertQueue(QUEUES.wishlistEvaluateDlq, { durable: true }),
+      ]),
+  });
+  await topologyChannel.waitForConnect();
+
   app.connectMicroservice<MicroserviceOptions>({
-    transport: Transport.GRPC,
+    transport: Transport.RMQ,
     options: {
-      package: 'wishlist',
-      protoPath: join(__dirname, '../../../libs/contracts/proto/wishlist.proto'),
-      url: `0.0.0.0:${process.env.GRPC_PORT ?? SERVICE_PORTS.wishlist.grpc}`,
+      urls: [getRabbitMqUrl()],
+      queue: QUEUES.wishlistEvaluate,
+      queueOptions: getRetryableQueueOptions(QUEUES.wishlistEvaluateRetry),
+      noAck: false,
     },
   });
   await app.startAllMicroservices();
