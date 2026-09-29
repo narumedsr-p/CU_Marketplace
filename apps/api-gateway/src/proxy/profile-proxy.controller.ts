@@ -4,10 +4,6 @@ import { Request, Response } from 'express';
 import { firstValueFrom } from 'rxjs';
 import { getServiceHttpUrl } from '@workspace/contracts';
 
-// Routes below are internal-only (called by the gateway itself server-to-server, e.g.
-// during the OAuth callback) and must never be reachable through this public proxy.
-const INTERNAL_ONLY_PATHS = ['/oauth-login'];
-
 @Controller('api/v1/profiles')
 export class ProfileProxyController {
   private readonly baseUrl = getServiceHttpUrl('profile');
@@ -19,9 +15,6 @@ export class ProfileProxyController {
   async proxy(@Req() req: Request, @Res() res: Response) {
     try {
       const path = req.originalUrl.slice(this.prefix.length) || '/';
-      if (INTERNAL_ONLY_PATHS.includes(path)) {
-        return res.status(403).json({ message: 'Forbidden' });
-      }
       const response = await firstValueFrom(
         this.httpService.request({
           url: `${this.baseUrl}${path}`,

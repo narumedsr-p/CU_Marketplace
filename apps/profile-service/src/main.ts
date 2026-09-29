@@ -2,6 +2,7 @@ import { config } from 'dotenv';
 import { join } from 'path';
 import { NestFactory } from '@nestjs/core';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
+import { Transport, MicroserviceOptions } from '@nestjs/microservices';
 import { SERVICE_PORTS } from '@workspace/contracts';
 import { apiReference } from '@scalar/nestjs-api-reference';
 import { AppModule } from './app.module';
@@ -18,6 +19,16 @@ async function bootstrap() {
   const document = SwaggerModule.createDocument(app, config);
   app.getHttpAdapter().get('/docs-json', (_req, res) => res.json(document));
   app.use('/docs', apiReference({ url: '/docs-json' }));
+
+  app.connectMicroservice<MicroserviceOptions>({
+    transport: Transport.GRPC,
+    options: {
+      package: 'profile',
+      protoPath: join(__dirname, '../../../libs/contracts/proto/profile.proto'),
+      url: `0.0.0.0:${process.env.GRPC_PORT ?? SERVICE_PORTS.profile.grpc}`,
+    },
+  });
+  await app.startAllMicroservices();
 
   await app.listen(process.env.PORT ?? SERVICE_PORTS.profile.http);
 }
