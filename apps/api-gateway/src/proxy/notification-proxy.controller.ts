@@ -4,8 +4,8 @@ import { Request, Response } from 'express';
 import { firstValueFrom } from 'rxjs';
 import { getServiceHttpUrl } from '@workspace/contracts';
 
-// pushInAppNotification moved to gRPC (see libs/contracts/proto/notification.proto) and no
-// longer exists over HTTP, so there's nothing left here to block.
+// Push notifications are now produced onto RabbitMQ directly by each service and no
+// longer exist over HTTP, so there's nothing left here to block.
 
 @Controller('api/v1/notifications')
 export class NotificationProxyController {

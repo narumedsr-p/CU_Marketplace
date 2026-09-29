@@ -1,4 +1,5 @@
 import { config } from 'dotenv';
+import { expand } from 'dotenv-expand';
 import { join } from 'path';
 import { NestFactory } from '@nestjs/core';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
@@ -11,8 +12,8 @@ import { AutoMatchModule } from './match/auto-match.module';
 
 // Shared secrets (e.g. INTERNAL_SERVICE_SECRET) live in the repo-root .env so they aren't
 // duplicated per service; this service's own .env still supplies its local overrides.
-config({ path: join(__dirname, '../../../.env') });
-config();
+expand(config({ path: join(__dirname, '../../../.env') }));
+expand(config());
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
