@@ -1,6 +1,6 @@
 import { Inject, Injectable, OnModuleInit } from '@nestjs/common';
 import { HttpService } from '@nestjs/axios';
-import { ClientGrpc } from '@nestjs/microservices';
+import { ClientGrpc, ClientProxy } from '@nestjs/microservices';
 import { Metadata } from '@grpc/grpc-js';
 import { firstValueFrom } from 'rxjs';
 import { getServiceHttpUrl } from '@workspace/contracts';
@@ -12,8 +12,6 @@ interface ItemResponse {
 
 interface CatalogGrpcService {
   reserveItem(data: { itemId: string }, metadata: Metadata): import('rxjs').Observable<ItemResponse>;
-  unreserveItem(data: { itemId: string }, metadata: Metadata): import('rxjs').Observable<ItemResponse>;
-  markItemAsSold(data: { itemId: string }, metadata: Metadata): import('rxjs').Observable<ItemResponse>;
 }
 
 @Injectable()
@@ -26,6 +24,7 @@ export class CatalogClient implements OnModuleInit {
   constructor(
     private readonly httpService: HttpService,
     @Inject('CATALOG_PACKAGE') private readonly client: ClientGrpc,
+    @Inject('CATALOG_QUEUE_PACKAGE') private readonly queueClient: ClientProxy,
   ) {}
 
   onModuleInit() {
@@ -54,15 +53,11 @@ export class CatalogClient implements OnModuleInit {
     );
   }
 
-  async unreserveItem(id: string) {
-    return firstValueFrom(
-      this.catalogGrpcService.unreserveItem({ itemId: id }, this.grpcMetadata()),
-    );
+  notifyItemSold(payload: { itemId: string; orderId: string }) {
+    this.queueClient.emit('catalog.item.sold', payload);
   }
 
-  async markItemAsSold(id: string) {
-    return firstValueFrom(
-      this.catalogGrpcService.markItemAsSold({ itemId: id }, this.grpcMetadata()),
-    );
+  notifyItemUnreserved(payload: { itemId: string; orderId: string }) {
+    this.queueClient.emit('catalog.item.unreserved', payload);
   }
 }

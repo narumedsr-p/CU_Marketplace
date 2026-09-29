@@ -189,18 +189,7 @@ export class OrdersService {
     const updated = await this.prisma.order.findUniqueOrThrow({
       where: { id: orderId },
     });
-    try {
-      await this.catalogClient.markItemAsSold(updated.itemId);
-    } catch (err) {
-      // TODO: genuinely unresolved — order.status is already Completed and correct (can't
-      // roll it back), but the item is now stuck out of sync in catalog-service with no
-      // automatic fix. Needs a retry/reconciliation job (message broker or cron), which
-      // this scaffold doesn't have yet. See TODO.md item 4.
-      this.logger.error(
-        `UNRESOLVED INCONSISTENCY: order ${updated.id} is Completed but item ${updated.itemId} was not marked Sold`,
-        err,
-      );
-    }
+    this.catalogClient.notifyItemSold({ itemId: updated.itemId, orderId: updated.id });
     return updated;
   }
 
@@ -233,17 +222,7 @@ export class OrdersService {
     const order = await this.prisma.order.findUniqueOrThrow({
       where: { id: orderId },
     });
-    try {
-      await this.catalogClient.unreserveItem(order.itemId);
-    } catch (err) {
-      // TODO: same unresolved gap as complete()'s markItemAsSold — Cancelled is correct and
-      // final, but the item can be left stuck Reserved with nothing to auto-correct it.
-      // Needs a retry/reconciliation job we don't have yet. See TODO.md item 4.
-      this.logger.error(
-        `UNRESOLVED INCONSISTENCY: order ${order.id} is Cancelled but item ${order.itemId} was not unreserved`,
-        err,
-      );
-    }
+    this.catalogClient.notifyItemUnreserved({ itemId: order.itemId, orderId: order.id });
     return order;
   }
 
