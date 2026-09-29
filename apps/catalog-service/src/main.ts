@@ -5,7 +5,7 @@ import { connect } from 'amqp-connection-manager';
 import { NestFactory } from '@nestjs/core';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import { Transport, MicroserviceOptions } from '@nestjs/microservices';
-import { SERVICE_PORTS, QUEUES, getRabbitMqUrl, getCatalogItemStatusQueueOptions } from '@workspace/contracts';
+import { SERVICE_PORTS, QUEUES, getRabbitMqUrl, getRetryableQueueOptions } from '@workspace/contracts';
 import { apiReference } from '@scalar/nestjs-api-reference';
 import { AppModule } from './app.module';
 
@@ -57,7 +57,7 @@ async function bootstrap() {
     options: {
       urls: [getRabbitMqUrl()],
       queue: QUEUES.catalogItemStatus,
-      queueOptions: getCatalogItemStatusQueueOptions(),
+      queueOptions: getRetryableQueueOptions(QUEUES.catalogItemStatusRetry),
       noAck: false,
     },
   });

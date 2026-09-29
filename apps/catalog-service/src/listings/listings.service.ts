@@ -2,7 +2,6 @@ import {
   ConflictException,
   ForbiddenException,
   Injectable,
-  Logger,
   NotFoundException,
 } from "@nestjs/common";
 import { PrismaClient } from "../generated/prisma-client/client";
@@ -14,7 +13,6 @@ export class ListingsService {
   private readonly prisma = new PrismaClient({
     adapter: new PrismaPg({ connectionString: process.env.DATABASE_URL! }),
   });
-  private readonly logger = new Logger(ListingsService.name);
 
   constructor(private readonly wishlistClient: WishlistClient) {}
 
@@ -41,14 +39,7 @@ export class ListingsService {
 
   async create(data: any) {
     const item = await this.prisma.item.create({ data });
-    try {
-      await this.wishlistClient.evaluateItem(item);
-    } catch (err) {
-      this.logger.error(
-        `Failed to evaluate wishlist matches for item ${item.id}`,
-        err,
-      );
-    }
+    this.wishlistClient.evaluateItem(item);
     return item;
   }
 

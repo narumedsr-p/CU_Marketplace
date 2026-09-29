@@ -22,9 +22,9 @@ export const SERVICE_PORTS: Record<ServiceName, ServicePorts> = {
   catalog: { http: 3001, grpc: 4001 },
   order: { http: 3002, grpc: 4002 },
   chat: { http: 3003, grpc: 4003 },
-  wishlist: { http: 3004, grpc: 4004 },
   review: { http: 3005 },
   profile: { http: 3006, grpc: 4006 },
+  wishlist: { http: 3004 },
   notification: { http: 3007 },
 };
 
@@ -53,17 +53,22 @@ export const QUEUES = {
   catalogItemStatus: 'catalog_item_status_queue',
   catalogItemStatusRetry: 'catalog_item_status_retry_queue',
   catalogItemStatusDlq: 'catalog_item_status_dlq',
+  wishlistEvaluate: 'wishlist_evaluate_queue',
+  wishlistEvaluateRetry: 'wishlist_evaluate_retry_queue',
+  wishlistEvaluateDlq: 'wishlist_evaluate_dlq',
 } as const;
 
-// Producer (order-service) and consumer (catalog-service) must declare this queue with
-// identical arguments — RabbitMQ throws a channel-level PRECONDITION_FAILED error if two
-// assertQueue calls for the same queue disagree on arguments.
-export function getCatalogItemStatusQueueOptions() {
+// Shared shape for any main queue backed by a retry-queue-plus-DLQ topology (TTL+DLX
+// delay pattern — see catalog-item-status.rmq.controller.ts for the full writeup).
+// Producer and consumer of a given main queue must both use this with the same
+// `retryQueue`, or RabbitMQ throws a channel-level PRECONDITION_FAILED error when their
+// assertQueue calls disagree on arguments.
+export function getRetryableQueueOptions(retryQueue: string) {
   return {
     durable: true,
     arguments: {
       'x-dead-letter-exchange': '',
-      'x-dead-letter-routing-key': QUEUES.catalogItemStatusRetry,
+      'x-dead-letter-routing-key': retryQueue,
     },
   };
 }

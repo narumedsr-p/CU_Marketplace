@@ -48,5 +48,5 @@ export class AutoMatchController {
     return this.autoMatchService.findMatches(ruleId, user?.userId, user?.role);
   }
 
-  // evaluateAutoMatch moved to gRPC — see auto-match.grpc.controller.ts.
+  // evaluateAutoMatch is triggered by catalog-service via RabbitMQ — see auto-match.rmq.controller.ts.
 }
