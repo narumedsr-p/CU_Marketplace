@@ -24,7 +24,7 @@ export const SERVICE_PORTS: Record<ServiceName, ServicePorts> = {
   chat: { http: 3003, grpc: 4003 },
   wishlist: { http: 3004, grpc: 4004 },
   review: { http: 3005 },
-  profile: { http: 3006 },
+  profile: { http: 3006, grpc: 4006 },
   notification: { http: 3007, grpc: 4007 },
 };
 

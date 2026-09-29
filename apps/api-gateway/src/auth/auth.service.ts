@@ -1,14 +1,12 @@
 import { randomBytes } from 'node:crypto';
 import { Injectable } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
-import { HttpService } from '@nestjs/axios';
 import { OAuth2Client } from 'google-auth-library';
-import { firstValueFrom } from 'rxjs';
-import { UserClaims, getServiceHttpUrl } from '@workspace/contracts';
+import { UserClaims } from '@workspace/contracts';
+import { ProfileClient } from './profile.client';
 
 @Injectable()
 export class AuthService {
-  private readonly profileServiceUrl = getServiceHttpUrl('profile');
   private readonly frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
   private readonly allowedEmailDomain = process.env.ALLOWED_EMAIL_DOMAIN || 'chula.ac.th';
   private readonly googleCallbackUrl =
@@ -21,7 +19,7 @@ export class AuthService {
 
   constructor(
     private readonly jwtService: JwtService,
-    private readonly httpService: HttpService,
+    private readonly profileClient: ProfileClient,
   ) {}
 
   // Step 1 of the real login flow: build Google's consent-screen URL. `state` is
@@ -108,13 +106,6 @@ export class AuthService {
     displayName: string,
     avatarUrl: string,
   ): Promise<{ userId: string; accountStatus: string; role: string }> {
-    const { data } = await firstValueFrom(
-      this.httpService.post(
-        `${this.profileServiceUrl}/oauth-login`,
-        { email, displayName, avatarUrl },
-        { timeout: 2000, headers: { 'x-internal-key': process.env.INTERNAL_SERVICE_SECRET } },
-      ),
-    );
-    return data;
+    return this.profileClient.oauthLogin(email, displayName, avatarUrl);
   }
 }
