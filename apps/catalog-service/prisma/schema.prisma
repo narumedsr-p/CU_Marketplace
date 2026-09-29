@@ -11,11 +11,10 @@ enum ItemStatus {
   Available
   Reserved
   Sold
-  Suspended
 }
 
 model Category {
-  id        String   @id @default(uuid()) @map("category_id") @db.Uuid
+  id        String   @id @default(dbgenerated("gen_random_uuid()")) @map("category_id") @db.Uuid
   name      String
   items     Item[]
   createdAt DateTime @default(now()) @map("created_at")
@@ -23,7 +22,7 @@ model Category {
 }
 
 model Item {
-  id          String     @id @default(uuid()) @map("item_id") @db.Uuid
+  id          String     @id @default(dbgenerated("gen_random_uuid()")) @map("item_id") @db.Uuid
   sellerId    String     @map("seller_id") @db.Uuid
   categoryId  String     @map("category_id") @db.Uuid
   category    Category   @relation(fields: [categoryId], references: [id])
