@@ -7,7 +7,7 @@ import Toast from './components/Toast';
 import RateSellerDialog from './components/RateSellerDialog';
 import useToast from './hooks/useToast';
 import useCatalogFilters from './hooks/useCatalogFilters';
-import { signIn, signOut } from './api/auth';
+import { consumeAuthRedirect, signIn, signOut } from './api/auth';
 import { getCurrentClaims, getCurrentUserId, getToken, onUnauthorized } from './api/client';
 import {
   createListing, deleteListing, fetchCategories, fetchListing, fetchListings, updateListing,
@@ -112,6 +112,8 @@ function ListingRoute({
   );
 }
 
+const authRedirect = consumeAuthRedirect();
+
 /**
  * Reference wiring only. Every screen is presentational — replace these useState blocks with
  * your data layer (TanStack Query, WebSocket client, etc.) and keep the props.
@@ -163,6 +165,10 @@ export default function App() {
   }, [navigate, flash]);
 
   useEffect(() => {
+    if (authRedirect.error) flash(authRedirect.error);
+  }, [flash]);
+
+  useEffect(() => {
     if (!loggedIn) return;
     let cancelled = false;
     (async () => {
@@ -201,17 +207,9 @@ export default function App() {
   const categoryNames = categories.map((c) => c.name);
   const categoryIdOf = (name: string) => categories.find((c) => c.name === name)?.id;
 
-  const handleSignIn = async () => {
+  const handleSignIn = () => {
     setSigningIn(true);
-    try {
-      await signIn();
-      setLoggedIn(true);
-      if (location.pathname === '/login') navigate('/');
-    } catch (err) {
-      flash('Sign-in failed: ' + (err instanceof Error ? err.message : 'unknown error'));
-    } finally {
-      setSigningIn(false);
-    }
+    signIn();
   };
 
   const logout = (message?: string) => {
