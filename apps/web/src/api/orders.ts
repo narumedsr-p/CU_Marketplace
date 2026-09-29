@@ -1,6 +1,7 @@
 import { api } from './client';
 import { fetchListing, type ApiCategory } from './catalog';
-import type { Listing, Order } from '../types';
+import { fetchProfile } from './profiles';
+import type { Listing, Order, Sale } from '../types';
 
 interface ApiOrder {
   id: string;
@@ -57,6 +58,27 @@ export async function fetchMyOrders(categories: ApiCategory[]) {
   const orders = await api<ApiOrder[]>(`${ORDERS}?role=buyer`);
   const sorted = [...orders].sort((a, b) => b.createdAt.localeCompare(a.createdAt));
   return withListings(sorted, categories);
+}
+
+export async function getPurchasesItem(categories: ApiCategory[]): Promise<Sale[]> {
+  const orders = await api<ApiOrder[]>(`${ORDERS}?role=seller`);
+  const sorted = [...orders].sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+  const buyerIds = [...new Set(sorted.map((o) => o.buyerId))];
+  const [withItems, buyers] = await Promise.all([
+    withListings(sorted, categories),
+    Promise.all(buyerIds.map(async (id) => [id, await fetchProfile(id)] as const)).then((e) => new Map(e)),
+  ]);
+  return withItems.map((order, i) => ({
+    id: order.id,
+    listingId: order.listingId,
+    title: order.title,
+    price: order.price,
+    buyer: buyers.get(sorted[i].buyerId)?.displayName ?? 'CU member',
+    when: order.placedAt,
+    status: order.status,
+    spot: order.spot,
+    action: order.status === 'Completed' ? 'Sold' : order.status === 'Reserved' ? 'Awaiting handover' : 'Buyer cancelled',
+  }));
 }
 
 export async function placeOrder(listing: Listing) {

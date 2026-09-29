@@ -14,7 +14,9 @@ import {
   type ApiCategory,
 } from './api/catalog';
 import { fetchMyProfile, fetchProfile, toUser, updateMyProfile, type ApiProfile } from './api/profiles';
-import { cancelOrder as apiCancelOrder, fetchMyOrders, placeOrder as apiPlaceOrder } from './api/orders';
+import {
+  cancelOrder as apiCancelOrder, fetchMyOrders, getPurchasesItem, placeOrder as apiPlaceOrder,
+} from './api/orders';
 
 import LoginScreen from './screens/LoginScreen';
 import CatalogScreen from './screens/CatalogScreen';
@@ -47,7 +49,7 @@ import {
 import type {
   AccountProfile, AutoMatchAlert, BlockedUser, ChatThread, ChatThreadListing, CurrentUser,
   HandoverOrder, HandoverStage, Listing, ModerationCase, NotificationItem,
-  NotificationPrefsState, Order, Purchase, ReportTarget, SellForm, SellerReservation, Suspension,
+  NotificationPrefsState, Order, Purchase, ReportTarget, Sale, SellForm, SellerReservation, Suspension,
 } from './types';
 
 const EMPTY_FORM: SellForm = {
@@ -131,6 +133,7 @@ export default function App() {
   const [selectedId, setSelectedId] = useState('');
   const [order, setOrder] = useState<Order | null>(null);
   const [orders, setOrders] = useState<Order[]>([]);
+  const [sales, setSales] = useState<Sale[]>([]);
   const [wishIds, setWishIds] = useState<string[]>(['10000000-0000-0000-0000-000000000003', '10000000-0000-0000-0000-000000000005']);
   const [me, setMe] = useState<ApiProfile | null>(null);
   const [prefs, setPrefs] = useState<NotificationPrefsState>({ chat: true, wishlist: true, order: true, promo: false });
@@ -199,6 +202,12 @@ export default function App() {
         setOrder((current) => current ?? mine.find((o) => o.status === 'Reserved') ?? null);
       } catch (err) {
         if (!cancelled) flash('Could not load orders: ' + (err instanceof Error ? err.message : 'unknown error'));
+      }
+      try {
+        const sold = await getPurchasesItem(cats);
+        if (!cancelled) setSales(sold);
+      } catch (err) {
+        if (!cancelled) flash('Could not load sales: ' + (err instanceof Error ? err.message : 'unknown error'));
       }
     })();
     return () => { cancelled = true; };
@@ -427,6 +436,7 @@ export default function App() {
       ]}
       listings={mine}
       purchases={purchases}
+      sales={sales}
       reviews={REVIEWS}
       prefs={prefs}
       notificationPrefs={NOTIFICATION_PREFS}

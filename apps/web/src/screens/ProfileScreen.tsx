@@ -5,7 +5,9 @@ import StatusBadge from '../components/StatusBadge';
 import StarRating from '../components/StarRating';
 import Button from '../components/Button';
 import Toggle from '../components/Toggle';
-import type { Listing, NotificationPrefDef, NotificationPrefsState, Purchase, Review } from '../types';
+import type {
+  Listing, ListingStatus, NotificationPrefDef, NotificationPrefsState, Purchase, Review, Sale,
+} from '../types';
 
 interface ProfileUser {
   name: string;
@@ -21,6 +23,7 @@ interface ProfileScreenProps {
   stats: [string, string | number][];
   listings: Listing[];
   purchases?: Purchase[];
+  sales?: Sale[];
   reviews?: Review[];
   prefs?: NotificationPrefsState;
   onTogglePref: (key: string) => void;
@@ -35,16 +38,16 @@ interface ProfileScreenProps {
 
 /**
  * isSelf gates everything private:
- *   own profile   -> Edit profile, Wishlist, +Sell, Purchases tab, Notifications tab
+ *   own profile   -> Edit profile, Wishlist, +Sell, Purchases tab, Sales tab, Notifications tab
  *   other profile -> Chat with seller, Report; Listings + Reviews only
  */
 export default function ProfileScreen({
-  user, isSelf, stats, listings, purchases = [], reviews = [],
+  user, isSelf, stats, listings, purchases = [], sales = [], reviews = [],
   prefs = {}, onTogglePref, notificationPrefs = [],
   onEditProfile, onWishlist, onSell, onChat, onReport, onOpenListing,
 }: ProfileScreenProps) {
   const tabs = isSelf
-    ? ['Listings', 'Purchases', 'Reviews', 'Notifications']
+    ? ['Listings', 'Purchases', 'Sales', 'Reviews', 'Notifications']
     : ['Listings', 'Reviews'];
   const [tab, setTab] = useState('Listings');
   const active = tabs.includes(tab) ? tab : 'Listings';
@@ -123,32 +126,19 @@ export default function ProfileScreen({
         )}
 
         {active === 'Purchases' && isSelf && (
-          <div style={{ paddingTop: 18 }}>
-            <div style={{
-              font: `400 13px/1.6 ${font}`, color: color.muted, maxWidth: '60ch', textWrap: 'pretty',
-            }}>
-              Everything you have bought, including cancelled reservations. Only you can see this tab.
-            </div>
-            <div style={{
-              border: '1px solid ' + color.lineSoft, borderRadius: 12, overflow: 'hidden', marginTop: 14,
-            }}>
-              <div style={{
-                display: 'grid',
-                gridTemplateColumns: 'minmax(0,2.2fr) 1fr 1fr .9fr 1.1fr',
-                gap: 1, background: color.lineSoft,
-              }}>
-                {['ITEM', 'SELLER', 'DATE', 'PAID', 'STATUS'].map((h) => (
-                  <div key={h} style={{
-                    background: color.pinkTint, padding: '11px 15px',
-                    font: `600 10.5px/1.4 ${font}`, letterSpacing: '.1em', color: '#A81756',
-                  }}>{h}</div>
-                ))}
-                {purchases.map((p) => (
-                  <Row key={p.id} p={p} />
-                ))}
-              </div>
-            </div>
-          </div>
+          <OrderTable
+            intro="Everything you have bought, including cancelled reservations. Only you can see this tab."
+            headers={['ITEM', 'SELLER', 'DATE', 'PAID', 'STATUS']}
+            rows={purchases.map((p) => ({ ...p, party: p.seller }))}
+          />
+        )}
+
+        {active === 'Sales' && isSelf && (
+          <OrderTable
+            intro="Your items that other people have reserved or bought, including cancelled orders. Only you can see this tab."
+            headers={['ITEM', 'BUYER', 'DATE', 'PRICE', 'STATUS']}
+            rows={sales.map((s) => ({ ...s, party: s.buyer }))}
+          />
         )}
 
         {active === 'Reviews' && (
@@ -209,7 +199,49 @@ export default function ProfileScreen({
   );
 }
 
-function Row({ p }: { p: Purchase }) {
+interface OrderRow {
+  id: string;
+  title: string;
+  spot: string;
+  party: string;
+  when: string;
+  price: number;
+  status: ListingStatus;
+  action: string;
+}
+
+function OrderTable({ intro, headers, rows }: { intro: string; headers: string[]; rows: OrderRow[] }) {
+  return (
+    <div style={{ paddingTop: 18 }}>
+      <div style={{
+        font: `400 13px/1.6 ${font}`, color: color.muted, maxWidth: '60ch', textWrap: 'pretty',
+      }}>
+        {intro}
+      </div>
+      <div style={{
+        border: '1px solid ' + color.lineSoft, borderRadius: 12, overflow: 'hidden', marginTop: 14,
+      }}>
+        <div style={{
+          display: 'grid',
+          gridTemplateColumns: 'minmax(0,2.2fr) 1fr 1fr .9fr 1.1fr',
+          gap: 1, background: color.lineSoft,
+        }}>
+          {headers.map((h) => (
+            <div key={h} style={{
+              background: color.pinkTint, padding: '11px 15px',
+              font: `600 10.5px/1.4 ${font}`, letterSpacing: '.1em', color: '#A81756',
+            }}>{h}</div>
+          ))}
+          {rows.map((p) => (
+            <Row key={p.id} p={p} />
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function Row({ p }: { p: OrderRow }) {
   const cell = { background: color.white, padding: '13px 15px', display: 'flex', alignItems: 'center' };
   return (
     <>
@@ -217,7 +249,7 @@ function Row({ p }: { p: Purchase }) {
         <div style={{ font: `600 13.5px/1.4 ${font}`, textWrap: 'pretty' as const }}>{p.title}</div>
         <div style={{ font: `500 11.5px/1.4 ${font}`, color: color.faint, marginTop: 4 }}>{p.spot}</div>
       </div>
-      <div style={{ ...cell, font: `500 13px/1.4 ${font}` }}>{p.seller}</div>
+      <div style={{ ...cell, font: `500 13px/1.4 ${font}` }}>{p.party}</div>
       <div style={{ ...cell, font: `500 13px/1.4 ${font}`, color: color.muted, whiteSpace: 'nowrap' as const }}>{p.when}</div>
       <div style={{ ...cell, font: `700 13.5px/1.4 ${font}`, color: color.pink, whiteSpace: 'nowrap' as const }}>
         {baht(p.price)}
