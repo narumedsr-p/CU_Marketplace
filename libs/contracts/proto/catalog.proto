@@ -6,8 +6,6 @@ service CatalogService {
   rpc ReserveItem (ItemRequest) returns (ItemResponse);
   rpc UnreserveItem (ItemRequest) returns (ItemResponse);
   rpc MarkItemAsSold (ItemRequest) returns (ItemResponse);
-  rpc SuspendItem (ItemRequest) returns (ItemResponse);
-  rpc SuspendAllUserItems (SuspendAllRequest) returns (SuspendAllResponse);
 }
 
 message ItemRequest {
@@ -17,12 +15,4 @@ message ItemRequest {
 message ItemResponse {
   string itemId = 1;
   string status = 2;
-}
-
-message SuspendAllRequest {
-  string sellerId = 1;
-}
-
-message SuspendAllResponse {
-  int32 suspendedCount = 1;
 }

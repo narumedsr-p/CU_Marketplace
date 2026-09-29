@@ -4,27 +4,24 @@ import { Request, Response } from 'express';
 import { firstValueFrom } from 'rxjs';
 import { getServiceHttpUrl } from '@workspace/contracts';
 
-const INTERNAL_ONLY_PATTERNS = [/^\/banned$/];
+// Routes below are internal-only (called by the gateway itself server-to-server, e.g.
+// during the OAuth callback) and must never be reachable through this public proxy.
+const INTERNAL_ONLY_PATHS = ['/oauth-login'];
 
-@Controller(['api/v1/moderation', 'api/v1/profiles'])
-export class ModerationProxyController {
-  private readonly baseUrl = getServiceHttpUrl('moderation');
-  private readonly prefixes = ['/api/v1/moderation', '/api/v1/profiles'];
+@Controller('api/v1/profiles')
+export class ProfileProxyController {
+  private readonly baseUrl = getServiceHttpUrl('profile');
+  private readonly prefix = '/api/v1/profiles';
 
   constructor(private readonly httpService: HttpService) {}
 
   @All('*')
   async proxy(@Req() req: Request, @Res() res: Response) {
     try {
-      const matchedPrefix = this.prefixes.find((prefix) => req.originalUrl.startsWith(prefix));
-      const path = matchedPrefix ? req.originalUrl.slice(matchedPrefix.length) || '/' : req.originalUrl;
-      const pathname = path.split('?')[0];
-
-      if (INTERNAL_ONLY_PATTERNS.some((pattern) => pattern.test(pathname))) {
-        res.status(403).json({ message: 'This endpoint is internal-only and cannot be accessed through the gateway.' });
-        return;
+      const path = req.originalUrl.slice(this.prefix.length) || '/';
+      if (INTERNAL_ONLY_PATHS.includes(path)) {
+        return res.status(403).json({ message: 'Forbidden' });
       }
-
       const response = await firstValueFrom(
         this.httpService.request({
           url: `${this.baseUrl}${path}`,

@@ -36,5 +36,4 @@ export class ChatController {
     return this.chatService.createMessage(roomId, user.userId, content);
   }
 
-  // sendSystemMessage/enforceChatBlock/blockUserRooms moved to gRPC — see chat.grpc.controller.ts.
 }

@@ -5,7 +5,7 @@ import { OrderProxyController } from './order-proxy.controller';
 import { ChatProxyController } from './chat-proxy.controller';
 import { WishlistProxyController } from './wishlist-proxy.controller';
 import { ReviewProxyController } from './review-proxy.controller';
-import { ModerationProxyController } from './moderation-proxy.controller';
+import { ProfileProxyController } from './profile-proxy.controller';
 import { NotificationProxyController } from './notification-proxy.controller';
 
 @Module({
@@ -16,7 +16,7 @@ import { NotificationProxyController } from './notification-proxy.controller';
     ChatProxyController,
     WishlistProxyController,
     ReviewProxyController,
-    ModerationProxyController,
+    ProfileProxyController,
     NotificationProxyController,
   ],
 })

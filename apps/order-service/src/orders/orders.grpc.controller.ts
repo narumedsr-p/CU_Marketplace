@@ -4,10 +4,6 @@ import { status } from '@grpc/grpc-js';
 import { GrpcInternalAuthGuard } from '../common/guards/grpc-internal-auth.guard';
 import { OrdersService } from './orders.service';
 
-interface UserRequest {
-  userId: string;
-}
-
 interface OrderRequest {
   orderId: string;
 }
@@ -16,16 +12,6 @@ interface OrderRequest {
 @UseGuards(GrpcInternalAuthGuard)
 export class OrdersGrpcController {
   constructor(private readonly ordersService: OrdersService) {}
-
-  @GrpcMethod('OrderService', 'CancelPendingOrders')
-  async cancelPendingOrders({ userId }: UserRequest) {
-    try {
-      const { cancelledCount } = await this.ordersService.cancelPendingForUser(userId);
-      return { cancelledCount };
-    } catch (err: any) {
-      throw new RpcException(err.message);
-    }
-  }
 
   @GrpcMethod('OrderService', 'VerifyOrderCompletion')
   async verifyOrderCompletion({ orderId }: OrderRequest) {

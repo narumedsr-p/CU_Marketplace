@@ -48,12 +48,7 @@ export class OpenApiController {
     {
       name: 'Profiles',
       prefix: '/api/v1/profiles',
-      docUrl: `${getServiceHttpUrl('moderation')}/docs-profiles-json`,
-    },
-    {
-      name: 'Moderation',
-      prefix: '/api/v1/moderation',
-      docUrl: `${getServiceHttpUrl('moderation')}/docs-moderation-json`,
+      docUrl: `${getServiceHttpUrl('profile')}/docs-json`,
     },
     {
       name: 'Notifications',

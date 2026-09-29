@@ -2,7 +2,6 @@ import { join } from 'path';
 import { Module } from '@nestjs/common';
 import { ClientsModule, Transport } from '@nestjs/microservices';
 import { ChatController } from './chat.controller';
-import { ChatGrpcController } from './chat.grpc.controller';
 import { ChatService } from './chat.service';
 import { NotificationClient } from '../clients/notification.client';
 import { getServiceGrpcUrl } from '@workspace/contracts';
@@ -21,7 +20,7 @@ import { getServiceGrpcUrl } from '@workspace/contracts';
       },
     ]),
   ],
-  controllers: [ChatController, ChatGrpcController],
+  controllers: [ChatController],
   providers: [ChatService, NotificationClient],
 })
 export class ChatModule {}
