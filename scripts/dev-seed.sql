@@ -25,18 +25,18 @@ INSERT INTO "Item" (item_id, seller_id, category_id, title, description, price, 
   ('10000000-0000-0000-0000-000000000012', '00000000-0000-0000-0000-000000000103', 'c0000000-0000-0000-0000-000000000007', 'Chem lab safety goggles, anti-fog', 'Extra pair from the lab kit, never used. Fits over glasses.', 90, 'Available', now() - interval '77 hours', now())
 ON CONFLICT (item_id) DO NOTHING;
 
-\connect cu_moderation_db
+\connect cu_profile_db
 
-INSERT INTO "UserProfile" (user_id, display_name, avatar_url, contact_info, updated_at) VALUES
-  ('00000000-0000-0000-0000-000000000001', 'Poonnawit Supawasuwat', '', '', now()),
-  ('00000000-0000-0000-0000-000000000101', 'Kannawich Munsak', '', '', now()),
-  ('00000000-0000-0000-0000-000000000102', 'Sirawit Longjun', '', '', now()),
-  ('00000000-0000-0000-0000-000000000103', 'Narumedsr Pitayachamrat', '', '', now()),
-  ('00000000-0000-0000-0000-000000000104', 'Panat Lorchatchawankul', '', '', now()),
-  ('00000000-0000-0000-0000-000000000105', 'Ploy Wanichkul', '', '', now()),
-  ('00000000-0000-0000-0000-000000000106', 'Tanapat Chaiyo', '', '', now()),
-  ('00000000-0000-0000-0000-000000000107', 'Mint Rojanasakul', '', '', now()),
-  ('00000000-0000-0000-0000-000000000108', 'Beam Suksawat', '', '', now()),
-  ('00000000-0000-0000-0000-000000000109', 'Ice Thanawat', '', '', now()),
-  ('00000000-0000-0000-0000-000000000110', 'Fah Ratchanon', '', '', now())
-ON CONFLICT (user_id) DO NOTHING;
+INSERT INTO "UserProfile" (user_id, email, display_name, avatar_url, contact_info, updated_at) VALUES
+  ('00000000-0000-0000-0000-000000000001', 'seed-001@student.chula.ac.th', 'Poonnawit Supawasuwat', '', 'seed-001@student.chula.ac.th', now()),
+  ('00000000-0000-0000-0000-000000000101', 'seed-101@student.chula.ac.th', 'Kannawich Munsak', '', 'seed-101@student.chula.ac.th', now()),
+  ('00000000-0000-0000-0000-000000000102', 'seed-102@student.chula.ac.th', 'Sirawit Longjun', '', 'seed-102@student.chula.ac.th', now()),
+  ('00000000-0000-0000-0000-000000000103', 'seed-103@student.chula.ac.th', 'Narumedsr Pitayachamrat', '', 'seed-103@student.chula.ac.th', now()),
+  ('00000000-0000-0000-0000-000000000104', 'seed-104@student.chula.ac.th', 'Panat Lorchatchawankul', '', 'seed-104@student.chula.ac.th', now()),
+  ('00000000-0000-0000-0000-000000000105', 'seed-105@student.chula.ac.th', 'Ploy Wanichkul', '', 'seed-105@student.chula.ac.th', now()),
+  ('00000000-0000-0000-0000-000000000106', 'seed-106@student.chula.ac.th', 'Tanapat Chaiyo', '', 'seed-106@student.chula.ac.th', now()),
+  ('00000000-0000-0000-0000-000000000107', 'seed-107@student.chula.ac.th', 'Mint Rojanasakul', '', 'seed-107@student.chula.ac.th', now()),
+  ('00000000-0000-0000-0000-000000000108', 'seed-108@student.chula.ac.th', 'Beam Suksawat', '', 'seed-108@student.chula.ac.th', now()),
+  ('00000000-0000-0000-0000-000000000109', 'seed-109@student.chula.ac.th', 'Ice Thanawat', '', 'seed-109@student.chula.ac.th', now()),
+  ('00000000-0000-0000-0000-000000000110', 'seed-110@student.chula.ac.th', 'Fah Ratchanon', '', 'seed-110@student.chula.ac.th', now())
+ON CONFLICT DO NOTHING;
