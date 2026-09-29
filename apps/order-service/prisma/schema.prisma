@@ -14,7 +14,7 @@ enum OrderStatus {
 }
 
 model Order {
-  id          String      @id @default(uuid()) @map("order_id") @db.Uuid
+  id          String      @id @default(dbgenerated("gen_random_uuid()")) @map("order_id") @db.Uuid
   buyerId     String      @map("buyer_id") @db.Uuid
   sellerId    String      @map("seller_id") @db.Uuid
   itemId      String      @map("item_id") @db.Uuid
