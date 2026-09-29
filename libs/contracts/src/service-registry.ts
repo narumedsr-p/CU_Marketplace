@@ -50,4 +50,20 @@ export function getRabbitMqUrl(): string {
 
 export const QUEUES = {
   notification: 'notification_queue',
+  catalogItemStatus: 'catalog_item_status_queue',
+  catalogItemStatusRetry: 'catalog_item_status_retry_queue',
+  catalogItemStatusDlq: 'catalog_item_status_dlq',
 } as const;
+
+// Producer (order-service) and consumer (catalog-service) must declare this queue with
+// identical arguments — RabbitMQ throws a channel-level PRECONDITION_FAILED error if two
+// assertQueue calls for the same queue disagree on arguments.
+export function getCatalogItemStatusQueueOptions() {
+  return {
+    durable: true,
+    arguments: {
+      'x-dead-letter-exchange': '',
+      'x-dead-letter-routing-key': QUEUES.catalogItemStatusRetry,
+    },
+  };
+}

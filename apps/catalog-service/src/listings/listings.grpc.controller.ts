@@ -22,16 +22,6 @@ export class ListingsGrpcController {
     return this.toResponse(itemId, () => this.listingsService.reserve(itemId));
   }
 
-  @GrpcMethod('CatalogService', 'UnreserveItem')
-  async unreserveItem({ itemId }: ItemRequest): Promise<ItemResponse> {
-    return this.toResponse(itemId, () => this.listingsService.unreserve(itemId));
-  }
-
-  @GrpcMethod('CatalogService', 'MarkItemAsSold')
-  async markItemAsSold({ itemId }: ItemRequest): Promise<ItemResponse> {
-    return this.toResponse(itemId, () => this.listingsService.markAsSold(itemId));
-  }
-
   private async toResponse(
     itemId: string,
     fn: () => Promise<{ status: string }>,

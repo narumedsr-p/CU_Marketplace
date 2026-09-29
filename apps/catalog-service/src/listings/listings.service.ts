@@ -139,4 +139,11 @@ export class ListingsService {
     return this.prisma.item.findUniqueOrThrow({ where: { id } });
   }
 
+  async getItemStatus(id: string): Promise<string | null> {
+    const item = await this.prisma.item.findUnique({
+      where: { id },
+      select: { status: true },
+    });
+    return item?.status ?? null;
+  }
 }

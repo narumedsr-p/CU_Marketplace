@@ -8,7 +8,12 @@ import { OrdersService } from './orders.service';
 import { CatalogClient } from '../clients/catalog.client';
 import { ChatClient } from '../clients/chat.client';
 import { NotificationClient } from '../clients/notification.client';
-import { getServiceGrpcUrl, getRabbitMqUrl, QUEUES } from '@workspace/contracts';
+import {
+  getServiceGrpcUrl,
+  getRabbitMqUrl,
+  getCatalogItemStatusQueueOptions,
+  QUEUES,
+} from '@workspace/contracts';
 
 @Module({
   imports: [
@@ -33,6 +38,15 @@ import { getServiceGrpcUrl, getRabbitMqUrl, QUEUES } from '@workspace/contracts'
           urls: [getRabbitMqUrl()],
           queue: QUEUES.notification,
           queueOptions: { durable: true },
+        },
+      },
+      {
+        name: 'CATALOG_QUEUE_PACKAGE',
+        transport: Transport.RMQ,
+        options: {
+          urls: [getRabbitMqUrl()],
+          queue: QUEUES.catalogItemStatus,
+          queueOptions: getCatalogItemStatusQueueOptions(),
         },
       },
     ]),
