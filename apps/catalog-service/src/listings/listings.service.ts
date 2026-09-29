@@ -19,7 +19,7 @@ export class ListingsService {
   constructor(private readonly wishlistClient: WishlistClient) {}
 
   findAll(query: any) {
-    // Public search only ever shows Available items — Sold/Suspended/Reserved items
+    // Public search only ever shows Available items — Sold/Reserved items
     // shouldn't appear to buyers browsing the marketplace.
     const where: any = { status: "Available" };
     if (query?.category_id) {
@@ -135,21 +135,4 @@ export class ListingsService {
     return this.prisma.item.findUniqueOrThrow({ where: { id } });
   }
 
-  async suspend(id: string) {
-    const item = await this.prisma.item.findUnique({ where: { id } });
-    if (!item) {
-      throw new NotFoundException("Item not found");
-    }
-    return this.prisma.item.update({
-      where: { id },
-      data: { status: "Suspended" as any },
-    });
-  }
-
-  suspendAllForSeller(sellerId: string) {
-    return this.prisma.item.updateMany({
-      where: { sellerId },
-      data: { status: "Suspended" as any },
-    });
-  }
 }

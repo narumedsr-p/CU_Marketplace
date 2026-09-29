@@ -14,11 +14,11 @@ config();
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
 
-  const config = new DocumentBuilder().setTitle('Chat Service').setVersion('1.0').build();
+  const config = new DocumentBuilder().setTitle('Profile Service').setVersion('1.0').build();
   const document = SwaggerModule.createDocument(app, config);
   app.getHttpAdapter().get('/docs-json', (_req, res) => res.json(document));
   app.use('/docs', apiReference({ url: '/docs-json' }));
 
-  await app.listen(process.env.PORT ?? SERVICE_PORTS.chat.http);
+  await app.listen(process.env.PORT ?? SERVICE_PORTS.profile.http);
 }
 bootstrap();

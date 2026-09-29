@@ -241,37 +241,6 @@ export class OrdersService {
     return order;
   }
 
-  async cancelPendingForUser(userId: string) {
-    const pendingOrders = await this.prisma.order.findMany({
-      where: {
-        OR: [{ buyerId: userId }, { sellerId: userId }],
-        status: "Pending",
-      },
-    });
-
-    let cancelledCount = 0;
-    for (const order of pendingOrders) {
-      const result = await this.prisma.order.updateMany({
-        where: { id: order.id, status: "Pending" },
-        data: { status: "Cancelled" },
-      });
-      if (result.count === 0) {
-        continue;
-      }
-      cancelledCount++;
-      try {
-        await this.catalogClient.unreserveItem(order.itemId);
-      } catch (err) {
-        // TODO: same unresolved gap as cancel() above, just batched — see TODO.md item 4.
-        this.logger.error(
-          `UNRESOLVED INCONSISTENCY: order ${order.id} is Cancelled but item ${order.itemId} was not unreserved`,
-          err,
-        );
-      }
-    }
-    return { cancelledCount };
-  }
-
   verify(orderId: string) {
     return this.prisma.order.findUnique({ where: { id: orderId } });
   }

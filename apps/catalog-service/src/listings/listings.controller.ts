@@ -1,4 +1,4 @@
-import { Body, Controller, Delete, Get, Param, Patch, Post, Put, Query } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Param, Post, Put, Query } from '@nestjs/common';
 import { ApiOperation } from '@nestjs/swagger';
 import { UserClaims } from '@workspace/contracts';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
@@ -39,16 +39,4 @@ export class ListingsController {
   }
 
   // reserveItem/unreserveItem/markItemAsSold moved to gRPC — see listings.grpc.controller.ts.
-
-  @ApiOperation({ summary: 'suspendItem() (Internal)' })
-  @Patch('items/:itemId/suspend')
-  suspendItem(@Param('itemId') itemId: string) {
-    return this.listingsService.suspend(itemId);
-  }
-
-  @ApiOperation({ summary: 'suspendAllUserItems() (Internal)' })
-  @Patch('users/:sellerId/items/suspend')
-  suspendAllUserItems(@Param('sellerId') sellerId: string) {
-    return this.listingsService.suspendAllForSeller(sellerId);
-  }
 }
