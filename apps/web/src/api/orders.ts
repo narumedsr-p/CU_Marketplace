@@ -89,6 +89,43 @@ export async function placeOrder(listing: Listing) {
   return toOrder(order, { ...listing, status: 'Reserved' });
 }
 
+export function getHandoverQr(orderId: string) {
+  return api<{ orderId: string; qrImageDataUrl: string; token: string }>(
+    `${ORDERS}/${orderId}/qr-code`,
+    { method: 'POST' },
+  );
+}
+
+export async function completeHandover(orderId: string, token: string) {
+  const updated = await api<ApiOrder>(`${ORDERS}/${orderId}/complete`, {
+    method: 'PATCH',
+    body: JSON.stringify({ token }),
+  });
+  return {
+    status: toOrderStatus(updated.status),
+    completedAt: updated.completedAt ? formatDateTime(updated.completedAt) : undefined,
+  };
+}
+
+export async function cancelOrderById(orderId: string) {
+  const updated = await api<ApiOrder>(`${ORDERS}/${orderId}/cancel`, { method: 'PATCH' });
+  return toOrderStatus(updated.status);
+}
+
+export async function fetchOrderStatus(orderId: string) {
+  const order = await api<ApiOrder>(`${ORDERS}/${orderId}`);
+  return toOrderStatus(order.status);
+}
+
+export function normalizeHandoverCode(input: string): string | null {
+  const code = input.replace(/[\s-]/g, '').toLowerCase();
+  return /^[0-9a-f]{32}$/.test(code) ? code : null;
+}
+
+export function formatHandoverCode(token: string) {
+  return token.toUpperCase().match(/.{1,4}/g)?.join(' ') ?? token;
+}
+
 export async function cancelOrder(order: Order) {
   const updated = await api<ApiOrder>(`${ORDERS}/${order.id}/cancel`, { method: 'PATCH' });
   return { ...order, status: toOrderStatus(updated.status) };
