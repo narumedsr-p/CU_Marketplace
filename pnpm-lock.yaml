@@ -42,7 +42,7 @@ importers:
         version: 10.2.0(@nestjs/common@10.4.22(reflect-metadata@0.2.2)(rxjs@7.8.2))
       '@nestjs/microservices':
         specifier: ^10.4.4
-        version: 10.4.22(@grpc/grpc-js@1.14.5)(@nestjs/common@10.4.22(reflect-metadata@0.2.2)(rxjs@7.8.2))(@nestjs/core@10.4.22)(reflect-metadata@0.2.2)(rxjs@7.8.2)
+        version: 10.4.22(@grpc/grpc-js@1.14.5)(@nestjs/common@10.4.22(reflect-metadata@0.2.2)(rxjs@7.8.2))(@nestjs/core@10.4.22)(amqp-connection-manager@5.0.0(amqplib@2.2.0))(amqplib@2.2.0)(reflect-metadata@0.2.2)(rxjs@7.8.2)
       '@nestjs/passport':
         specifier: ^10.0.3
         version: 10.0.3(@nestjs/common@10.4.22(reflect-metadata@0.2.2)(rxjs@7.8.2))(passport@0.7.0)
@@ -118,7 +118,7 @@ importers:
         version: 10.4.22(@nestjs/common@10.4.22(reflect-metadata@0.2.2)(rxjs@7.8.2))(@nestjs/microservices@10.4.22)(@nestjs/platform-express@10.4.22)(reflect-metadata@0.2.2)(rxjs@7.8.2)
       '@nestjs/microservices':
         specifier: ^10.4.4
-        version: 10.4.22(@grpc/grpc-js@1.14.5)(@nestjs/common@10.4.22(reflect-metadata@0.2.2)(rxjs@7.8.2))(@nestjs/core@10.4.22)(reflect-metadata@0.2.2)(rxjs@7.8.2)
+        version: 10.4.22(@grpc/grpc-js@1.14.5)(@nestjs/common@10.4.22(reflect-metadata@0.2.2)(rxjs@7.8.2))(@nestjs/core@10.4.22)(amqp-connection-manager@5.0.0(amqplib@2.2.0))(amqplib@2.2.0)(reflect-metadata@0.2.2)(rxjs@7.8.2)
       '@nestjs/platform-express':
         specifier: ^10.4.4
         version: 10.4.22(@nestjs/common@10.4.22(reflect-metadata@0.2.2)(rxjs@7.8.2))(@nestjs/core@10.4.22)
@@ -137,12 +137,21 @@ importers:
       '@workspace/contracts':
         specifier: workspace:*
         version: link:../../libs/contracts
+      amqp-connection-manager:
+        specifier: ^5.0.0
+        version: 5.0.0(amqplib@2.2.0)
+      amqplib:
+        specifier: ^2.2.0
+        version: 2.2.0
       axios:
         specifier: ^1.7.7
         version: 1.20.0
       dotenv:
         specifier: ^16.4.5
         version: 16.6.1
+      dotenv-expand:
+        specifier: ^1000.0.0
+        version: 1000.0.0
       reflect-metadata:
         specifier: ^0.2.2
         version: 0.2.2
@@ -153,6 +162,9 @@ importers:
       '@nestjs/cli':
         specifier: ^10.4.5
         version: 10.4.9
+      '@types/amqplib':
+        specifier: ^0.10.8
+        version: 0.10.8
       '@types/express':
         specifier: ^4.17.21
         version: 4.17.25
@@ -197,7 +209,7 @@ importers:
         version: 10.4.22(@nestjs/common@10.4.22(reflect-metadata@0.2.2)(rxjs@7.8.2))(@nestjs/microservices@10.4.22)(@nestjs/platform-express@10.4.22)(reflect-metadata@0.2.2)(rxjs@7.8.2)
       '@nestjs/microservices':
         specifier: ^10.4.4
-        version: 10.4.22(@grpc/grpc-js@1.14.5)(@nestjs/common@10.4.22(reflect-metadata@0.2.2)(rxjs@7.8.2))(@nestjs/core@10.4.22)(reflect-metadata@0.2.2)(rxjs@7.8.2)
+        version: 10.4.22(@grpc/grpc-js@1.14.5)(@nestjs/common@10.4.22(reflect-metadata@0.2.2)(rxjs@7.8.2))(@nestjs/core@10.4.22)(amqp-connection-manager@5.0.0(amqplib@2.2.0))(amqplib@2.2.0)(reflect-metadata@0.2.2)(rxjs@7.8.2)
       '@nestjs/platform-express':
         specifier: ^10.4.4
         version: 10.4.22(@nestjs/common@10.4.22(reflect-metadata@0.2.2)(rxjs@7.8.2))(@nestjs/core@10.4.22)
@@ -216,12 +228,21 @@ importers:
       '@workspace/contracts':
         specifier: workspace:*
         version: link:../../libs/contracts
+      amqp-connection-manager:
+        specifier: ^5.0.0
+        version: 5.0.0(amqplib@2.2.0)
+      amqplib:
+        specifier: ^2.2.0
+        version: 2.2.0
       axios:
         specifier: ^1.7.7
         version: 1.20.0
       dotenv:
         specifier: ^16.4.5
         version: 16.6.1
+      dotenv-expand:
+        specifier: ^1000.0.0
+        version: 1000.0.0
       reflect-metadata:
         specifier: ^0.2.2
         version: 0.2.2
@@ -232,6 +253,9 @@ importers:
       '@nestjs/cli':
         specifier: ^10.4.5
         version: 10.4.9
+      '@types/amqplib':
+        specifier: ^0.10.8
+        version: 0.10.8
       '@types/express':
         specifier: ^4.17.21
         version: 4.17.25
@@ -273,7 +297,7 @@ importers:
         version: 10.4.22(@nestjs/common@10.4.22(reflect-metadata@0.2.2)(rxjs@7.8.2))(@nestjs/microservices@10.4.22)(@nestjs/platform-express@10.4.22)(reflect-metadata@0.2.2)(rxjs@7.8.2)
       '@nestjs/microservices':
         specifier: ^10.4.4
-        version: 10.4.22(@grpc/grpc-js@1.14.5)(@nestjs/common@10.4.22(reflect-metadata@0.2.2)(rxjs@7.8.2))(@nestjs/core@10.4.22)(reflect-metadata@0.2.2)(rxjs@7.8.2)
+        version: 10.4.22(@grpc/grpc-js@1.14.5)(@nestjs/common@10.4.22(reflect-metadata@0.2.2)(rxjs@7.8.2))(@nestjs/core@10.4.22)(amqp-connection-manager@5.0.0(amqplib@2.2.0))(amqplib@2.2.0)(reflect-metadata@0.2.2)(rxjs@7.8.2)
       '@nestjs/platform-express':
         specifier: ^10.4.4
         version: 10.4.22(@nestjs/common@10.4.22(reflect-metadata@0.2.2)(rxjs@7.8.2))(@nestjs/core@10.4.22)
@@ -292,9 +316,18 @@ importers:
       '@workspace/contracts':
         specifier: workspace:*
         version: link:../../libs/contracts
+      amqp-connection-manager:
+        specifier: ^5.0.0
+        version: 5.0.0(amqplib@2.2.0)
+      amqplib:
+        specifier: ^2.2.0
+        version: 2.2.0
       dotenv:
         specifier: ^16.4.5
         version: 16.6.1
+      dotenv-expand:
+        specifier: ^1000.0.0
+        version: 1000.0.0
       reflect-metadata:
         specifier: ^0.2.2
         version: 0.2.2
@@ -305,6 +338,9 @@ importers:
       '@nestjs/cli':
         specifier: ^10.4.5
         version: 10.4.9
+      '@types/amqplib':
+        specifier: ^0.10.8
+        version: 0.10.8
       '@types/express':
         specifier: ^4.17.21
         version: 4.17.25
@@ -349,7 +385,7 @@ importers:
         version: 10.4.22(@nestjs/common@10.4.22(reflect-metadata@0.2.2)(rxjs@7.8.2))(@nestjs/microservices@10.4.22)(@nestjs/platform-express@10.4.22)(reflect-metadata@0.2.2)(rxjs@7.8.2)
       '@nestjs/microservices':
         specifier: ^10.4.4
-        version: 10.4.22(@grpc/grpc-js@1.14.5)(@nestjs/common@10.4.22(reflect-metadata@0.2.2)(rxjs@7.8.2))(@nestjs/core@10.4.22)(reflect-metadata@0.2.2)(rxjs@7.8.2)
+        version: 10.4.22(@grpc/grpc-js@1.14.5)(@nestjs/common@10.4.22(reflect-metadata@0.2.2)(rxjs@7.8.2))(@nestjs/core@10.4.22)(amqp-connection-manager@5.0.0(amqplib@2.2.0))(amqplib@2.2.0)(reflect-metadata@0.2.2)(rxjs@7.8.2)
       '@nestjs/platform-express':
         specifier: ^10.4.4
         version: 10.4.22(@nestjs/common@10.4.22(reflect-metadata@0.2.2)(rxjs@7.8.2))(@nestjs/core@10.4.22)
@@ -368,12 +404,21 @@ importers:
       '@workspace/contracts':
         specifier: workspace:*
         version: link:../../libs/contracts
+      amqp-connection-manager:
+        specifier: ^5.0.0
+        version: 5.0.0(amqplib@2.2.0)
+      amqplib:
+        specifier: ^2.2.0
+        version: 2.2.0
       axios:
         specifier: ^1.7.7
         version: 1.20.0
       dotenv:
         specifier: ^16.4.5
         version: 16.6.1
+      dotenv-expand:
+        specifier: ^1000.0.0
+        version: 1000.0.0
       qrcode:
         specifier: ^1.5.4
         version: 1.5.4
@@ -387,6 +432,9 @@ importers:
       '@nestjs/cli':
         specifier: ^10.4.5
         version: 10.4.9
+      '@types/amqplib':
+        specifier: ^0.10.8
+        version: 0.10.8
       '@types/express':
         specifier: ^4.17.21
         version: 4.17.25
@@ -431,7 +479,7 @@ importers:
         version: 10.4.22(@nestjs/common@10.4.22(reflect-metadata@0.2.2)(rxjs@7.8.2))(@nestjs/microservices@10.4.22)(@nestjs/platform-express@10.4.22)(reflect-metadata@0.2.2)(rxjs@7.8.2)
       '@nestjs/microservices':
         specifier: ^10.4.4
-        version: 10.4.22(@grpc/grpc-js@1.14.5)(@nestjs/common@10.4.22(reflect-metadata@0.2.2)(rxjs@7.8.2))(@nestjs/core@10.4.22)(reflect-metadata@0.2.2)(rxjs@7.8.2)
+        version: 10.4.22(@grpc/grpc-js@1.14.5)(@nestjs/common@10.4.22(reflect-metadata@0.2.2)(rxjs@7.8.2))(@nestjs/core@10.4.22)(amqp-connection-manager@5.0.0(amqplib@2.2.0))(amqplib@2.2.0)(reflect-metadata@0.2.2)(rxjs@7.8.2)
       '@nestjs/platform-express':
         specifier: ^10.4.4
         version: 10.4.22(@nestjs/common@10.4.22(reflect-metadata@0.2.2)(rxjs@7.8.2))(@nestjs/core@10.4.22)
@@ -453,6 +501,9 @@ importers:
       dotenv:
         specifier: ^16.4.5
         version: 16.6.1
+      dotenv-expand:
+        specifier: ^1000.0.0
+        version: 1000.0.0
       reflect-metadata:
         specifier: ^0.2.2
         version: 0.2.2
@@ -507,7 +558,7 @@ importers:
         version: 10.4.22(@nestjs/common@10.4.22(reflect-metadata@0.2.2)(rxjs@7.8.2))(@nestjs/microservices@10.4.22)(@nestjs/platform-express@10.4.22)(reflect-metadata@0.2.2)(rxjs@7.8.2)
       '@nestjs/microservices':
         specifier: ^10.4.4
-        version: 10.4.22(@grpc/grpc-js@1.14.5)(@nestjs/common@10.4.22(reflect-metadata@0.2.2)(rxjs@7.8.2))(@nestjs/core@10.4.22)(reflect-metadata@0.2.2)(rxjs@7.8.2)
+        version: 10.4.22(@grpc/grpc-js@1.14.5)(@nestjs/common@10.4.22(reflect-metadata@0.2.2)(rxjs@7.8.2))(@nestjs/core@10.4.22)(amqp-connection-manager@5.0.0(amqplib@2.2.0))(amqplib@2.2.0)(reflect-metadata@0.2.2)(rxjs@7.8.2)
       '@nestjs/platform-express':
         specifier: ^10.4.4
         version: 10.4.22(@nestjs/common@10.4.22(reflect-metadata@0.2.2)(rxjs@7.8.2))(@nestjs/core@10.4.22)
@@ -526,12 +577,21 @@ importers:
       '@workspace/contracts':
         specifier: workspace:*
         version: link:../../libs/contracts
+      amqp-connection-manager:
+        specifier: ^5.0.0
+        version: 5.0.0(amqplib@2.2.0)
+      amqplib:
+        specifier: ^2.2.0
+        version: 2.2.0
       axios:
         specifier: ^1.7.7
         version: 1.20.0
       dotenv:
         specifier: ^16.4.5
         version: 16.6.1
+      dotenv-expand:
+        specifier: ^1000.0.0
+        version: 1000.0.0
       reflect-metadata:
         specifier: ^0.2.2
         version: 0.2.2
@@ -542,6 +602,9 @@ importers:
       '@nestjs/cli':
         specifier: ^10.4.5
         version: 10.4.9
+      '@types/amqplib':
+        specifier: ^0.10.8
+        version: 0.10.8
       '@types/express':
         specifier: ^4.17.21
         version: 4.17.25
@@ -617,7 +680,7 @@ importers:
         version: 10.4.22(@nestjs/common@10.4.22(reflect-metadata@0.2.2)(rxjs@7.8.2))(@nestjs/microservices@10.4.22)(@nestjs/platform-express@10.4.22)(reflect-metadata@0.2.2)(rxjs@7.8.2)
       '@nestjs/microservices':
         specifier: ^10.4.4
-        version: 10.4.22(@grpc/grpc-js@1.14.5)(@nestjs/common@10.4.22(reflect-metadata@0.2.2)(rxjs@7.8.2))(@nestjs/core@10.4.22)(reflect-metadata@0.2.2)(rxjs@7.8.2)
+        version: 10.4.22(@grpc/grpc-js@1.14.5)(@nestjs/common@10.4.22(reflect-metadata@0.2.2)(rxjs@7.8.2))(@nestjs/core@10.4.22)(amqp-connection-manager@5.0.0(amqplib@2.2.0))(amqplib@2.2.0)(reflect-metadata@0.2.2)(rxjs@7.8.2)
       '@nestjs/platform-express':
         specifier: ^10.4.4
         version: 10.4.22(@nestjs/common@10.4.22(reflect-metadata@0.2.2)(rxjs@7.8.2))(@nestjs/core@10.4.22)
@@ -636,12 +699,21 @@ importers:
       '@workspace/contracts':
         specifier: workspace:*
         version: link:../../libs/contracts
+      amqp-connection-manager:
+        specifier: ^5.0.0
+        version: 5.0.0(amqplib@2.2.0)
+      amqplib:
+        specifier: ^2.2.0
+        version: 2.2.0
       axios:
         specifier: ^1.7.7
         version: 1.20.0
       dotenv:
         specifier: ^16.4.5
         version: 16.6.1
+      dotenv-expand:
+        specifier: ^1000.0.0
+        version: 1000.0.0
       reflect-metadata:
         specifier: ^0.2.2
         version: 0.2.2
@@ -652,6 +724,9 @@ importers:
       '@nestjs/cli':
         specifier: ^10.4.5
         version: 10.4.9
+      '@types/amqplib':
+        specifier: ^0.10.8
+        version: 0.10.8
       '@types/express':
         specifier: ^4.17.21
         version: 4.17.25
@@ -1636,6 +1711,9 @@ packages:
   '@tokenizer/token@0.3.0':
     resolution: {integrity: sha512-OvjF+z51L3ov0OyAU0duzsYuvO01PH7x4t6DJx+guahgTnBHkhJdG7soQeTSFLWN3efnHyibZ4Z8l2EuWwJN3A==}
 
+  '@types/amqplib@0.10.8':
+    resolution: {integrity: sha512-vtDp8Pk1wsE/AuQ8/Rgtm6KUZYqcnTgNvEHwzCkX8rL7AGsC6zqAfKAAJhUZXFhM/Pp++tbnUHiam/8vVpPztA==}
+
   '@types/babel__core@7.20.5':
     resolution: {integrity: sha512-qoQprZvz5wQFJwMDqeseRXWv3rqMvhgpbXFfVyWhbx9X47POIA6i/+dXefEmZKoAgOaTdaIgNSMqMIU61yRyzA==}
 
@@ -1910,6 +1988,16 @@ packages:
 
   ajv@8.20.0:
     resolution: {integrity: sha512-Thbli+OlOj+iMPYFBVBfJ3OmCAnaSyNn4M1vz9T6Gka5Jt9ba/HIR56joy65tY6kx/FCF5VXNB819Y7/GUrBGA==}
+
+  amqp-connection-manager@5.0.0:
+    resolution: {integrity: sha512-88yQzqa5RSBgnLl504XjvCQJ7d+osskdwvg35Lwm1LRbfLjNU9p7SQUMSP82BB7mseiq9tIUPJ3HE3eXQbpjEw==}
+    engines: {node: '>=10.0.0', npm: '>5.0.0'}
+    peerDependencies:
+      amqplib: '*'
+
+  amqplib@2.2.0:
+    resolution: {integrity: sha512-VifzN9aHs/Q3zTruVHXh2yCisQyXexBN91CQ2E5iSyUKyNjH6ilYhJGte5AXZH/Bj1PaH7SwPhyuSf6Msd2udw==}
+    engines: {node: '>=18'}
 
   ansi-colors@4.1.3:
     resolution: {integrity: sha512-/6w/C21Pm1A7aZitlI5Ni/2J6FFQN8i1Cvz3kHABAAbw93v/NlvKdVOqz7CCWz/3iv/JplRSEEZ83XION15ovw==}
@@ -2314,6 +2402,10 @@ packages:
 
   dijkstrajs@1.0.3:
     resolution: {integrity: sha512-qiSlmBq9+BCdCA/L46dw8Uy93mloxsPSbwnm5yrKn2vMPiy8KyAskTF6zuV/j5BMsmOGZDPs7KjU+mjb670kfA==}
+
+  dotenv-expand@1000.0.0:
+    resolution: {integrity: sha512-3T4TtUjXm5iGKFEirqKjcDJ0EheFJbv9peb5xytC+HNu3l5Ygnu4dYE8yeqkppHMsh1If9C/A//EJu7IPtNu+A==}
+    engines: {node: '>=16'}
 
   dotenv@16.6.1:
     resolution: {integrity: sha512-uBq4egWHTcTt33a72vpSG0z3HnPuIl6NqYcTrKEg2azoEyl2hpW0zqlxysq2pK9HlDIHyHyakeYaYnSAwd8bow==}
@@ -3196,6 +3288,9 @@ packages:
         optional: true
       typescript:
         optional: true
+
+  promise-breaker@6.0.0:
+    resolution: {integrity: sha512-BthzO9yTPswGf7etOBiHCVuugs2N01/Q/94dIPls48z2zCmrnDptUUZzfIb+41xq0MnYZ/BzmOd6ikDR4ibNZA==}
 
   proper-lockfile@4.1.2:
     resolution: {integrity: sha512-TjNPblN4BwAWMXU8s9AEz4JmQxnD1NNL7bNOY/AKUzyamc379FWASUhc/K1pL2noVb+XmZKLL68cjzLsiOAMaA==}
@@ -4275,7 +4370,7 @@ snapshots:
       tslib: 2.8.1
       uid: 2.0.2
     optionalDependencies:
-      '@nestjs/microservices': 10.4.22(@grpc/grpc-js@1.14.5)(@nestjs/common@10.4.22(reflect-metadata@0.2.2)(rxjs@7.8.2))(@nestjs/core@10.4.22)(reflect-metadata@0.2.2)(rxjs@7.8.2)
+      '@nestjs/microservices': 10.4.22(@grpc/grpc-js@1.14.5)(@nestjs/common@10.4.22(reflect-metadata@0.2.2)(rxjs@7.8.2))(@nestjs/core@10.4.22)(amqp-connection-manager@5.0.0(amqplib@2.2.0))(amqplib@2.2.0)(reflect-metadata@0.2.2)(rxjs@7.8.2)
       '@nestjs/platform-express': 10.4.22(@nestjs/common@10.4.22(reflect-metadata@0.2.2)(rxjs@7.8.2))(@nestjs/core@10.4.22)
     transitivePeerDependencies:
       - encoding
@@ -4291,7 +4386,7 @@ snapshots:
       '@nestjs/common': 10.4.22(reflect-metadata@0.2.2)(rxjs@7.8.2)
       reflect-metadata: 0.2.2
 
-  '@nestjs/microservices@10.4.22(@grpc/grpc-js@1.14.5)(@nestjs/common@10.4.22(reflect-metadata@0.2.2)(rxjs@7.8.2))(@nestjs/core@10.4.22)(reflect-metadata@0.2.2)(rxjs@7.8.2)':
+  '@nestjs/microservices@10.4.22(@grpc/grpc-js@1.14.5)(@nestjs/common@10.4.22(reflect-metadata@0.2.2)(rxjs@7.8.2))(@nestjs/core@10.4.22)(amqp-connection-manager@5.0.0(amqplib@2.2.0))(amqplib@2.2.0)(reflect-metadata@0.2.2)(rxjs@7.8.2)':
     dependencies:
       '@nestjs/common': 10.4.22(reflect-metadata@0.2.2)(rxjs@7.8.2)
       '@nestjs/core': 10.4.22(@nestjs/common@10.4.22(reflect-metadata@0.2.2)(rxjs@7.8.2))(@nestjs/microservices@10.4.22)(@nestjs/platform-express@10.4.22)(reflect-metadata@0.2.2)(rxjs@7.8.2)
@@ -4301,6 +4396,8 @@ snapshots:
       tslib: 2.8.1
     optionalDependencies:
       '@grpc/grpc-js': 1.14.5
+      amqp-connection-manager: 5.0.0(amqplib@2.2.0)
+      amqplib: 2.2.0
 
   '@nestjs/passport@10.0.3(@nestjs/common@10.4.22(reflect-metadata@0.2.2)(rxjs@7.8.2))(passport@0.7.0)':
     dependencies:
@@ -4649,6 +4746,10 @@ snapshots:
       - supports-color
 
   '@tokenizer/token@0.3.0': {}
+
+  '@types/amqplib@0.10.8':
+    dependencies:
+      '@types/node': 22.20.1
 
   '@types/babel__core@7.20.5':
     dependencies:
@@ -5041,6 +5142,13 @@ snapshots:
       json-schema-traverse: 1.0.0
       require-from-string: 2.0.2
 
+  amqp-connection-manager@5.0.0(amqplib@2.2.0):
+    dependencies:
+      amqplib: 2.2.0
+      promise-breaker: 6.0.0
+
+  amqplib@2.2.0: {}
+
   ansi-colors@4.1.3: {}
 
   ansi-escapes@4.3.2:
@@ -5423,6 +5531,8 @@ snapshots:
   destroy@1.2.0: {}
 
   dijkstrajs@1.0.3: {}
+
+  dotenv-expand@1000.0.0: {}
 
   dotenv@16.6.1: {}
 
@@ -6361,6 +6471,8 @@ snapshots:
       - magicast
       - react
       - react-dom
+
+  promise-breaker@6.0.0: {}
 
   proper-lockfile@4.1.2:
     dependencies:
