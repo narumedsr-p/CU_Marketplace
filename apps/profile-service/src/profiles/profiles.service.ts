@@ -1,8 +1,4 @@
-import {
-  ForbiddenException,
-  Injectable,
-  NotFoundException,
-} from "@nestjs/common";
+import { Injectable, NotFoundException } from "@nestjs/common";
 import { PrismaClient } from "../generated/prisma-client/client";
 import { PrismaPg } from "@prisma/adapter-pg";
 
@@ -31,6 +27,16 @@ export class ProfilesService {
     return this.prisma.userProfile.create({ data: { userId, ...safeData } });
   }
 
+  async findOrCreateByEmail(email: string, displayName: string, avatarUrl: string) {
+    const existing = await this.prisma.userProfile.findUnique({ where: { email } });
+    if (existing) {
+      return existing;
+    }
+    return this.prisma.userProfile.create({
+      data: { email, displayName, avatarUrl, contactInfo: email },
+    });
+  }
+
   async updateStatus(userId: string, accountStatus: string) {
     const profile = await this.prisma.userProfile.findUnique({
       where: { userId },
@@ -42,12 +48,5 @@ export class ProfilesService {
       where: { userId },
       data: { accountStatus: accountStatus as any },
     });
-  }
-
-  banUser(targetUserId: string, callerRole: string) {
-    if (callerRole !== "Admin") {
-      throw new ForbiddenException("Only an admin can ban a user");
-    }
-    return this.updateStatus(targetUserId, "Banned");
   }
 }

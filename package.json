@@ -2,10 +2,14 @@
   "name": "cu-marketplace",
   "version": "0.1.0",
   "private": true,
+  "engines": {
+    "node": ">=22.12.0"
+  },
   "scripts": {
     "build": "turbo run build",
     "dev": "turbo run dev",
-    "lint": "turbo run lint"
+    "lint": "turbo run lint",
+    "docs:grpc": "mkdir -p libs/contracts/proto/generated && protoc --doc_out=libs/contracts/proto/generated --doc_opt=html,index.html -I libs/contracts/proto libs/contracts/proto/*.proto"
   },
   "devDependencies": {
     "turbo": "^1.13.4",

@@ -2,19 +2,19 @@ import { All, Controller, Req, Res } from '@nestjs/common';
 import { HttpService } from '@nestjs/axios';
 import { Request, Response } from 'express';
 import { firstValueFrom } from 'rxjs';
+import { getServiceHttpUrl } from '@workspace/contracts';
 
-@Controller(['api/v1/moderation', 'api/v1/profiles'])
-export class ModerationProxyController {
-  private readonly baseUrl = process.env.MODERATION_SERVICE_URL || 'http://localhost:3006';
-  private readonly prefixes = ['/api/v1/moderation', '/api/v1/profiles'];
+@Controller('api/v1/profiles')
+export class ProfileProxyController {
+  private readonly baseUrl = getServiceHttpUrl('profile');
+  private readonly prefix = '/api/v1/profiles';
 
   constructor(private readonly httpService: HttpService) {}
 
   @All('*')
   async proxy(@Req() req: Request, @Res() res: Response) {
     try {
-      const matchedPrefix = this.prefixes.find((prefix) => req.originalUrl.startsWith(prefix));
-      const path = matchedPrefix ? req.originalUrl.slice(matchedPrefix.length) || '/' : req.originalUrl;
+      const path = req.originalUrl.slice(this.prefix.length) || '/';
       const response = await firstValueFrom(
         this.httpService.request({
           url: `${this.baseUrl}${path}`,

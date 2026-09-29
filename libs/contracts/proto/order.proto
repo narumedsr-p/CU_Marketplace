@@ -1,0 +1,18 @@
+syntax = "proto3";
+
+package order;
+
+service OrderService {
+  rpc VerifyOrderCompletion (OrderRequest) returns (OrderStatusResponse);
+}
+
+message OrderRequest {
+  string orderId = 1;
+}
+
+message OrderStatusResponse {
+  string orderId = 1;
+  string status = 2;
+  string buyerId = 3;
+  string sellerId = 4;
+}

@@ -8,7 +8,7 @@ datasource db {
 }
 
 model ChatRoom {
-  id           String        @id @default(uuid()) @map("room_id") @db.Uuid
+  id           String        @id @default(dbgenerated("gen_random_uuid()")) @map("room_id") @db.Uuid
   participant1 String        @map("participant_1") @db.Uuid
   participant2 String        @map("participant_2") @db.Uuid
   itemId       String        @map("item_id") @db.Uuid
@@ -19,7 +19,7 @@ model ChatRoom {
 }
 
 model ChatMessage {
-  id          String   @id @default(uuid()) @map("message_id") @db.Uuid
+  id          String   @id @default(dbgenerated("gen_random_uuid()")) @map("message_id") @db.Uuid
   roomId      String   @map("room_id") @db.Uuid
   room        ChatRoom @relation(fields: [roomId], references: [id])
   senderId    String?  @map("sender_id") @db.Uuid

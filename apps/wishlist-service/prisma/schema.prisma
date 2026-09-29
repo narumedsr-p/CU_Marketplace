@@ -8,7 +8,7 @@ datasource db {
 }
 
 model Wishlist {
-  id        String   @id @default(uuid()) @map("wishlist_id") @db.Uuid
+  id        String   @id @default(dbgenerated("gen_random_uuid()")) @map("wishlist_id") @db.Uuid
   userId    String   @map("user_id") @db.Uuid
   itemId    String   @map("item_id") @db.Uuid
   createdAt DateTime @default(now()) @map("created_at")
@@ -16,7 +16,7 @@ model Wishlist {
 }
 
 model MatchRule {
-  id         String        @id @default(uuid()) @map("rule_id") @db.Uuid
+  id         String        @id @default(dbgenerated("gen_random_uuid()")) @map("rule_id") @db.Uuid
   userId     String        @map("user_id") @db.Uuid
   categoryId String        @map("category_id") @db.Uuid
   keyword    String
@@ -28,7 +28,7 @@ model MatchRule {
 }
 
 model MatchRecord {
-  id            String    @id @default(uuid()) @map("match_id") @db.Uuid
+  id            String    @id @default(dbgenerated("gen_random_uuid()")) @map("match_id") @db.Uuid
   ruleId        String    @map("rule_id") @db.Uuid
   rule          MatchRule @relation(fields: [ruleId], references: [id])
   matchedItemId String    @map("matched_item_id") @db.Uuid

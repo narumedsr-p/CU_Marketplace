@@ -48,15 +48,5 @@ export class OrdersController {
     return this.ordersService.cancel(orderId, user.userId);
   }
 
-  @ApiOperation({ summary: 'cancelPendingOrders() (Internal)' })
-  @Patch('users/:userId/orders/cancel')
-  cancelPendingOrders(@Param('userId') userId: string) {
-    return this.ordersService.cancelPendingForUser(userId);
-  }
-
-  @ApiOperation({ summary: 'verifyOrderCompletion() (Internal)' })
-  @Get('orders/:orderId/verify')
-  verifyOrderCompletion(@Param('orderId') orderId: string) {
-    return this.ordersService.verify(orderId);
-  }
+  // cancelPendingOrders/verifyOrderCompletion moved to gRPC — see orders.grpc.controller.ts.
 }

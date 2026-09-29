@@ -1,0 +1,18 @@
+syntax = "proto3";
+
+package catalog;
+
+service CatalogService {
+  rpc ReserveItem (ItemRequest) returns (ItemResponse);
+  rpc UnreserveItem (ItemRequest) returns (ItemResponse);
+  rpc MarkItemAsSold (ItemRequest) returns (ItemResponse);
+}
+
+message ItemRequest {
+  string itemId = 1;
+}
+
+message ItemResponse {
+  string itemId = 1;
+  string status = 2;
+}

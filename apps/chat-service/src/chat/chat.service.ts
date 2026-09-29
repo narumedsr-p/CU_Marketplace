@@ -149,49 +149,4 @@ export class ChatService {
 
     return message;
   }
-
-  async sendSystemMessage(roomId: string, content: string) {
-    if (!content || !content.trim()) {
-      throw new BadRequestException('System message content cannot be empty');
-    }
-
-    const room = await this.prisma.chatRoom.findUnique({
-      where: { id: roomId },
-    });
-
-    if (!room) {
-      throw new NotFoundException('Chat room not found');
-    }
-
-    const message = await this.prisma.chatMessage.create({
-      data: {
-        roomId,
-        senderId: null,
-        content,
-        isSystemMsg: true,
-      },
-    });
-
-    await this.prisma.chatRoom.update({
-      where: { id: roomId },
-      data: { updatedAt: new Date() },
-    });
-
-    return message;
-  }
-
-  async blockRoom(roomId: string) {
-    const room = await this.prisma.chatRoom.findUnique({
-      where: { id: roomId },
-    });
-
-    if (!room) {
-      throw new NotFoundException('Chat room not found');
-    }
-
-    return this.prisma.chatRoom.update({
-      where: { id: roomId },
-      data: { isBlocked: true },
-    });
-  }
 }

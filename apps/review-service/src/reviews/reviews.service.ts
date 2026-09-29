@@ -7,6 +7,7 @@ import {
   NotFoundException,
   ServiceUnavailableException,
 } from '@nestjs/common';
+import { status as GrpcStatus } from '@grpc/grpc-js';
 import { PrismaClient } from '../generated/prisma-client/client';
 import { PrismaPg } from '@prisma/adapter-pg';
 import { OrderClient } from '../clients/order.client';
@@ -78,7 +79,7 @@ export class ReviewsService {
     try {
       order = await this.orderClient.getOrder(data.orderId);
     } catch (err: any) {
-      if (err.response?.status === 404) {
+      if (err.code === GrpcStatus.NOT_FOUND) {
         throw new NotFoundException('Associated order not found');
       }
       this.logger.error(`Failed to verify order ${data.orderId} with Order Service`, err);
