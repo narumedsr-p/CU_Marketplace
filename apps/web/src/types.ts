@@ -3,7 +3,7 @@ export type ListingStatus = 'Available' | 'Reserved' | 'Sold' | 'Completed' | 'C
 // Minimal shape the presentational card/grid components need — lets screens
 // (e.g. the sell preview) pass a partial listing before it has an id or seller.
 export interface ListingSummary {
-  id?: number;
+  id?: string;
   title: string;
   price: number | string;
   cat: string;
@@ -16,7 +16,8 @@ export interface ListingSummary {
 }
 
 export interface Listing extends ListingSummary {
-  id: number;
+  id: string;
+  sellerId?: string;
   price: number;
   was?: number;
   seller: string;
@@ -68,9 +69,10 @@ export interface NotificationPrefDef {
 export type NotificationPrefsState = Record<string, boolean>;
 
 export interface Order {
+  id: string;
   reference: string;
   handoverCode: string;
-  listingId: number;
+  listingId: string;
   title: string;
   price: number;
   seller: string;
@@ -78,7 +80,7 @@ export interface Order {
   spot: string;
   window: string;
   placedAt: string;
-  status: 'Reserved' | 'Completed';
+  status: 'Reserved' | 'Completed' | 'Cancelled';
   rated: boolean;
   completedAt?: string;
 }
@@ -227,7 +229,7 @@ export interface ChatMessage {
 }
 
 export interface ChatThreadListing {
-  id: number;
+  id: string;
   title: string;
   price: number;
   status: ListingStatus;
@@ -273,6 +275,7 @@ export type NotificationKind = 'match' | 'price' | 'order' | 'chat' | 'account';
 export interface NotificationAction {
   type: string;
   id?: number;
+  listingId?: string;
 }
 
 export interface NotificationItem {

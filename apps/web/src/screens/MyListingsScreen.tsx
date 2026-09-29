@@ -22,12 +22,12 @@ interface EditForm {
 
 interface MyListingsScreenProps {
   listings?: Listing[];
-  reservations?: Record<number, SellerReservation>;
+  reservations?: Record<string, SellerReservation>;
   conditions?: string[];
-  onSave?: (id: number, patch: { title: string; price: number; cond: string; desc: string }) => void;
-  onDelete?: (id: number) => void;
-  onShowQr?: (id: number) => void;
-  onCancelReservation?: (id: number) => void;
+  onSave?: (id: string, patch: { title: string; price: number; cond: string; desc: string }) => void;
+  onDelete?: (id: string) => void;
+  onShowQr?: (id: string) => void;
+  onCancelReservation?: (id: string) => void;
   onNew: () => void;
 }
 
@@ -37,8 +37,8 @@ export default function MyListingsScreen({
   onSave, onDelete, onShowQr, onCancelReservation, onNew,
 }: MyListingsScreenProps) {
   const [tab, setTab] = useState<ListingTab>('Active');
-  const [editId, setEditId] = useState<number | null>(null);
-  const [delId, setDelId] = useState<number | null>(null);
+  const [editId, setEditId] = useState<string | null>(null);
+  const [delId, setDelId] = useState<string | null>(null);
   const [form, setForm] = useState<EditForm>({ title: '', price: '', cond: '', desc: '' });
   const rows = listings.filter((l) => tabOf(l) === tab);
   const count = (t: ListingTab) => listings.filter((l) => tabOf(l) === t).length;

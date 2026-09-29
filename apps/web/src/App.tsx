@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Routes, Route, Navigate, useLocation, useNavigate, useParams } from 'react-router-dom';
 import GlobalStyles from './theme/GlobalStyles';
 import AppShell from './layout/AppShell';
@@ -7,10 +7,17 @@ import Toast from './components/Toast';
 import RateSellerDialog from './components/RateSellerDialog';
 import useToast from './hooks/useToast';
 import useCatalogFilters from './hooks/useCatalogFilters';
+import { consumeAuthRedirect, signIn, signOut } from './api/auth';
+import { getCurrentClaims, getCurrentUserId, getToken, onUnauthorized } from './api/client';
+import {
+  createListing, deleteListing, fetchCategories, fetchListing, fetchListings, updateListing,
+  type ApiCategory,
+} from './api/catalog';
+import { fetchMyProfile, fetchProfile, toUser, updateMyProfile, type ApiProfile } from './api/profiles';
+import { cancelOrder as apiCancelOrder, fetchMyOrders, placeOrder as apiPlaceOrder } from './api/orders';
 
 import LoginScreen from './screens/LoginScreen';
 import CatalogScreen from './screens/CatalogScreen';
-import BrowseScreen from './screens/BrowseScreen';
 import ListingScreen from './screens/ListingScreen';
 import SellScreen from './screens/SellScreen';
 import OrderScreen from './screens/OrderScreen';
@@ -26,17 +33,21 @@ import ReportScreen from './screens/ReportScreen';
 import ReviewScreen from './screens/ReviewScreen';
 import SuspendedScreen from './screens/SuspendedScreen';
 import WishlistScreen from './screens/WishlistScreen';
+import ListingsRoute from './routes/listings/ListingsRoute';
+import OrdersRoute from './routes/orders/OrdersRoute';
+import OrderDetailRoute from './routes/orders/OrderDetailRoute';
+import SellerProfileRoute from './routes/profile/SellerProfileRoute';
 
 import {
-  LISTINGS, CATEGORIES, CONDITIONS, FACULTIES, SPOTS,
-  CURRENT_USER, PURCHASES, REVIEWS, NOTIFICATION_PREFS,
-  ACCOUNT_USER, ACCOUNT_PROFILE, SESSIONS, BLOCKED_USERS, NOTIFICATIONS,
+  CONDITIONS, FACULTIES, SPOTS,
+  REVIEWS, NOTIFICATION_PREFS,
+  SESSIONS, BLOCKED_USERS, NOTIFICATIONS,
   THREADS, RESERVATIONS, AUTO_MATCH_ALERTS, MODERATION_CASES, AUDIT_LOG, MY_REPORTS,
 } from './data/mockListings';
 import type {
-  AccountProfile, AutoMatchAlert, BlockedUser, ChatThread, ChatThreadListing,
+  AccountProfile, AutoMatchAlert, BlockedUser, ChatThread, ChatThreadListing, CurrentUser,
   HandoverOrder, HandoverStage, Listing, ModerationCase, NotificationItem,
-  NotificationPrefsState, Order, ReportTarget, SellForm, SellerReservation, Suspension,
+  NotificationPrefsState, Order, Purchase, ReportTarget, SellForm, SellerReservation, Suspension,
 } from './types';
 
 const EMPTY_FORM: SellForm = {
@@ -50,9 +61,11 @@ const DEMO_SUSPENSION: Suspension = {
 
 interface ListingRouteProps {
   listings: Listing[];
-  wishIds: number[];
-  setWishIds: (fn: (ids: number[]) => number[]) => void;
-  setSelectedId: (id: number) => void;
+  loaded: boolean;
+  loadListing: (id: string) => Promise<Listing | null>;
+  wishIds: string[];
+  setWishIds: (fn: (ids: string[]) => string[]) => void;
+  setSelectedId: (id: string) => void;
   placeOrder: (listing: Listing) => void;
   openChat: (listing: Listing) => void;
   openReport: (target: ReportTarget) => void;
@@ -63,14 +76,24 @@ interface ListingRouteProps {
 // Reads :id from the URL and keeps `selectedId` in sync so a direct link / refresh / back
 // button resolves to the right listing.
 function ListingRoute({
-  listings, wishIds, setWishIds, setSelectedId, placeOrder, openChat, openReport, setBlocked, flash,
+  listings, loaded, loadListing, wishIds, setWishIds, setSelectedId, placeOrder, openChat, openReport, setBlocked, flash,
 }: ListingRouteProps) {
-  const { id } = useParams<{ id: string }>();
+  const { id = '' } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const numId = Number(id);
-  useState(() => setSelectedId(numId));
-  const listing = listings.find((l) => l.id === numId);
-  if (!listing) return <Navigate to="/" replace />;
+  useState(() => setSelectedId(id));
+  const inList = listings.find((l) => l.id === id);
+  const [fetched, setFetched] = useState<Listing | null | undefined>(undefined);
+
+  useEffect(() => {
+    if (inList || !loaded) return;
+    setFetched(undefined);
+    loadListing(id).then(setFetched).catch(() => setFetched(null));
+  }, [id, inList, loaded]);
+
+  const listing = inList ?? fetched;
+  if (!listing) {
+    return loaded && fetched === null ? <Navigate to="/" replace /> : null;
+  }
   return (
     <ListingScreen
       listing={listing}
@@ -82,12 +105,14 @@ function ListingRoute({
         setWishIds((w) => (on ? w.filter((x) => x !== listing.id) : [...w, listing.id]));
         flash(on ? 'Removed from wishlist' : 'Added to wishlist');
       }}
-      onViewSeller={() => navigate('/profile/' + encodeURIComponent(listing.seller))}
+      onViewSeller={() => { if (listing.sellerId) navigate('/profile/' + listing.sellerId); }}
       onReport={() => openReport({ type: 'Listing', title: listing.title, target: listing.seller })}
       onBlock={() => { setBlocked((b) => [...b, { name: listing.seller, since: 'today' }]); flash(listing.seller + ' blocked.'); }}
     />
   );
 }
+
+const authRedirect = consumeAuthRedirect();
 
 /**
  * Reference wiring only. Every screen is presentational — replace these useState blocks with
@@ -96,21 +121,25 @@ function ListingRoute({
 export default function App() {
   const navigate = useNavigate();
   const location = useLocation();
-  const [loggedIn, setLoggedIn] = useState(false);
+  const [loggedIn, setLoggedIn] = useState(() => getToken() !== null);
+  const [signingIn, setSigningIn] = useState(false);
 
-  const [listings, setListings] = useState<Listing[]>(LISTINGS);
+  const [listings, setListings] = useState<Listing[]>([]);
+  const [listingsLoaded, setListingsLoaded] = useState(false);
+  const [categories, setCategories] = useState<ApiCategory[]>([]);
   const [query, setQuery] = useState('');
-  const [selectedId, setSelectedId] = useState(1);
+  const [selectedId, setSelectedId] = useState('');
   const [order, setOrder] = useState<Order | null>(null);
-  const [wishIds, setWishIds] = useState<number[]>([3, 5]);
-  const [profileOf, setProfileOf] = useState<string | null>(null);
+  const [orders, setOrders] = useState<Order[]>([]);
+  const [wishIds, setWishIds] = useState<string[]>(['10000000-0000-0000-0000-000000000003', '10000000-0000-0000-0000-000000000005']);
+  const [me, setMe] = useState<ApiProfile | null>(null);
   const [prefs, setPrefs] = useState<NotificationPrefsState>({ chat: true, wishlist: true, order: true, promo: false });
   const [form, setForm] = useState<SellForm>(EMPTY_FORM);
   const [rateOpen, setRateOpen] = useState(false);
 
   const [reportTarget, setReportTarget] = useState<ReportTarget | null>(null);
   const [handover, setHandover] = useState<{
-    role: 'buyer' | 'seller'; listingId: number | null;
+    role: 'buyer' | 'seller'; listingId: string | null;
     stage: Record<'buyer' | 'seller', HandoverStage>; codeError: boolean;
   }>({ role: 'buyer', listingId: null, stage: { buyer: 'ready', seller: 'ready' }, codeError: false });
 
@@ -119,43 +148,109 @@ export default function App() {
   const [notifications, setNotifications] = useState<NotificationItem[]>(NOTIFICATIONS);
   const [blocked, setBlocked] = useState<BlockedUser[]>(BLOCKED_USERS);
   const [cases, setCases] = useState<ModerationCase[]>(MODERATION_CASES);
-  const [reservations, setReservations] = useState<Record<number, SellerReservation>>(RESERVATIONS);
+  const [reservations, setReservations] = useState<Record<string, SellerReservation>>(RESERVATIONS);
   const [alerts, setAlerts] = useState<AutoMatchAlert[]>(AUTO_MATCH_ALERTS);
-  const [profile, setProfile] = useState<AccountProfile>(ACCOUNT_PROFILE);
+  const [profile, setProfile] = useState<AccountProfile>({ bio: '', contact: '' });
 
   const { toast, flash } = useToast();
   const { filters, setFilters, results, counts, reset } = useCatalogFilters(listings, query);
 
-  const selected = useMemo(
-    () => listings.find((l) => l.id === selectedId) || listings[0],
-    [listings, selectedId],
-  );
+  useEffect(() => {
+    onUnauthorized(() => {
+      setLoggedIn(false);
+      navigate('/login');
+      flash('Your session expired. Please sign in again.');
+    });
+    return () => onUnauthorized(null);
+  }, [navigate, flash]);
 
-  const openListing = (l: Listing | number) => {
+  useEffect(() => {
+    if (authRedirect.error) flash(authRedirect.error);
+  }, [flash]);
+
+  useEffect(() => {
+    if (!loggedIn) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const myProfile = await fetchMyProfile();
+        if (cancelled) return;
+        setMe(myProfile);
+        if (myProfile) setProfile((p) => ({ ...p, contact: myProfile.contactInfo }));
+      } catch {
+        if (!cancelled) setMe(null);
+      }
+      let cats: ApiCategory[] = [];
+      try {
+        cats = await fetchCategories();
+        const items = await fetchListings(cats);
+        if (cancelled) return;
+        setCategories(cats);
+        setListings(items);
+      } catch (err) {
+        if (!cancelled) flash('Could not load listings: ' + (err instanceof Error ? err.message : 'unknown error'));
+      } finally {
+        if (!cancelled) setListingsLoaded(true);
+      }
+      try {
+        const mine = await fetchMyOrders(cats);
+        if (cancelled) return;
+        setOrders(mine);
+        setOrder((current) => current ?? mine.find((o) => o.status === 'Reserved') ?? null);
+      } catch (err) {
+        if (!cancelled) flash('Could not load orders: ' + (err instanceof Error ? err.message : 'unknown error'));
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [loggedIn, flash]);
+
+  const categoryNames = categories.map((c) => c.name);
+  const categoryIdOf = (name: string) => categories.find((c) => c.name === name)?.id;
+
+  const handleSignIn = () => {
+    setSigningIn(true);
+    signIn();
+  };
+
+  const logout = (message?: string) => {
+    signOut();
+    setLoggedIn(false);
+    navigate('/login');
+    if (message) flash(message);
+  };
+
+  const openListing = (l: Listing | string) => {
     const id = typeof l === 'object' ? l.id : l;
     setSelectedId(id);
     navigate('/listing/' + id);
   };
 
-  const placeOrder = (listing: Listing) => {
+  const placeOrder = async (listing: Listing) => {
+    if (listing.sellerId && listing.sellerId === getCurrentUserId()) { flash('This is your own listing.'); return; }
     if (listing.status !== 'Available') { flash('This item was just reserved by another buyer.'); return; }
-    setListings((ls) => ls.map((l) => (l.id === listing.id ? { ...l, status: 'Reserved' as const } : l)));
-    setOrder({
-      reference: 'ORD-2609-0148', handoverCode: 'RSA-4K7Q-2X', listingId: listing.id,
-      title: listing.title, price: listing.price, seller: listing.seller,
-      faculty: listing.faculty ?? '', spot: listing.spot,
-      window: 'Today 17:00–19:00', placedAt: 'Today 14:22', status: 'Reserved', rated: false,
-    });
-    navigate('/order');
-    flash('Item reserved. Seller notified in chat.');
+    try {
+      const placed = await apiPlaceOrder(listing);
+      setListings((ls) => ls.map((l) => (l.id === listing.id ? { ...l, status: 'Reserved' as const } : l)));
+      setOrders((os) => [placed, ...os]);
+      setOrder(placed);
+      navigate(`/orders/${placed.id}`);
+      flash('Item reserved. Seller notified in chat.');
+    } catch (err) {
+      flash('Could not place order: ' + (err instanceof Error ? err.message : 'unknown error'));
+    }
   };
 
-  const cancelOrder = () => {
-    if (!order) return;
-    setListings((ls) => ls.map((l) => (l.id === order.listingId ? { ...l, status: 'Available' as const } : l)));
-    setOrder(null);
-    navigate('/');
-    flash('Order cancelled. Item is Available again.');
+  const cancelOrder = async (target: Order) => {
+    try {
+      const updated = await apiCancelOrder(target);
+      setListings((ls) => ls.map((l) => (l.id === target.listingId ? { ...l, status: 'Available' as const } : l)));
+      setOrders((os) => os.map((o) => (o.id === target.id ? updated : o)));
+      setOrder((current) => (current?.id === target.id ? null : current));
+      navigate('/orders');
+      flash('Order cancelled. Item is Available again.');
+    } catch (err) {
+      flash('Could not cancel order: ' + (err instanceof Error ? err.message : 'unknown error'));
+    }
   };
 
   const completeBuyerOrder = () => {
@@ -167,26 +262,52 @@ export default function App() {
     flash('Handover confirmed. Order closed.');
   };
 
-  const cancelSellerReservation = (id: number) => {
+  const cancelSellerReservation = (id: string) => {
     setListings((ls) => ls.map((l) => (l.id === id ? { ...l, status: 'Available' as const } : l)));
     setReservations((r) => { const n = { ...r }; delete n[id]; return n; });
     flash('Reservation cancelled. The buyer was notified.');
     navigate('/mylistings');
   };
 
-  const publish = () => {
+  const publish = async () => {
     if (!form.title.trim() || !form.price) { flash('Title and price are required.'); return; }
-    const id = Math.max(...listings.map((l) => l.id)) + 1;
-    setListings((ls) => [{
-      id, title: form.title.trim(), price: Number(form.price), was: Math.round(Number(form.price) * 1.6),
-      cat: form.cat, cond: form.cond, faculty: CURRENT_USER.faculty, seller: CURRENT_USER.name,
-      rating: 4.8, reviewCount: 21, sold: 7, watchers: 0, posted: 'just now', status: 'Available' as const,
-      spot: form.spot, handovers: 13, replyTime: '12 min', since: '2025',
-      desc: form.desc.trim() || 'No description provided.',
-    }, ...ls]);
-    setForm(EMPTY_FORM);
-    navigate('/');
-    flash('Published. 3 buyers matched by auto-match keyword.');
+    const categoryId = categoryIdOf(form.cat);
+    if (!categoryId) { flash('Pick a category.'); return; }
+    try {
+      const listing = await createListing({
+        title: form.title.trim(),
+        description: form.desc.trim(),
+        price: Number(form.price),
+        categoryId,
+      }, categories);
+      setListings((ls) => [listing, ...ls]);
+      setForm(EMPTY_FORM);
+      navigate('/listing/' + listing.id);
+      flash('Published.');
+    } catch (err) {
+      flash('Could not publish: ' + (err instanceof Error ? err.message : 'unknown error'));
+    }
+  };
+
+  const saveListing = async (id: string, patch: { title: string; price: number; desc: string }) => {
+    try {
+      const updated = await updateListing(id, { title: patch.title, price: patch.price, description: patch.desc }, categories);
+      setListings((ls) => ls.map((l) => (l.id === id ? updated : l)));
+      flash('Listing updated.');
+    } catch (err) {
+      flash('Could not update: ' + (err instanceof Error ? err.message : 'unknown error'));
+    }
+  };
+
+  const removeListing = async (id: string) => {
+    try {
+      await deleteListing(id);
+      setListings((ls) => ls.filter((l) => l.id !== id));
+      setWishIds((w) => w.filter((x) => x !== id));
+      flash('Listing deleted.');
+    } catch (err) {
+      flash('Could not delete: ' + (err instanceof Error ? err.message : 'unknown error'));
+    }
   };
 
   const openChat = (l: Listing) => {
@@ -228,26 +349,32 @@ export default function App() {
     setNotifications((ns) => ns.map((x) => (x.id === n.id ? { ...x, read: true } : x)));
     const a = n.action;
     if (!a) return;
-    if (a.type === 'listing' && a.id !== undefined) openListing(a.id);
+    if (a.type === 'listing' && a.listingId) openListing(a.listingId);
     else if (a.type === 'chat' && a.id !== undefined) { setActiveThread(a.id); navigate('/chat'); }
     else if (a.type === 'mylistings') navigate('/mylistings');
     else if (a.type === 'account') navigate('/account');
   };
 
-  const mine = listings.filter((l) => l.seller === CURRENT_USER.name);
-  const viewingSelf = profileOf === null;
-  const sellerListings = listings.filter((l) => l.seller === profileOf);
+  const currentUserId = getCurrentUserId();
+  const currentUser: CurrentUser = me
+    ? toUser(me)
+    : { id: currentUserId ?? '', name: '', memberType: 'Student', faculty: '', joined: '' };
+  const mine = listings.filter((l) => l.sellerId === currentUserId);
+  const purchases: Purchase[] = orders.map((o) => ({
+    id: o.id, title: o.title, price: o.price, seller: o.seller, when: o.placedAt, status: o.status, spot: o.spot,
+    action: o.status === 'Completed' ? 'Rate seller' : o.status === 'Reserved' ? 'In progress' : 'Cancelled',
+  }));
   const savedAll = listings.filter((l) => wishIds.includes(l.id));
 
   const buyerHandover: HandoverOrder | null = order ? {
     reference: order.reference, handoverCode: order.handoverCode, title: order.title,
-    price: order.price, seller: order.seller, buyer: CURRENT_USER.name, spot: order.spot, window: order.window,
+    price: order.price, seller: order.seller, buyer: currentUser.name, spot: order.spot, window: order.window,
   } : null;
   const sellerListing = listings.find((l) => l.id === handover.listingId);
   const sellerRes = handover.listingId !== null ? reservations[handover.listingId] : undefined;
   const sellerHandover: HandoverOrder | null = sellerListing && sellerRes ? {
     reference: sellerRes.reference, handoverCode: 'RSA-SELLER-CODE', title: sellerListing.title,
-    price: sellerListing.price, seller: CURRENT_USER.name, buyer: sellerRes.buyer, spot: sellerRes.spot, window: sellerRes.window,
+    price: sellerListing.price, seller: currentUser.name, buyer: sellerRes.buyer, spot: sellerRes.spot, window: sellerRes.window,
   } : null;
 
   const reviewOrder = order && !order.rated
@@ -262,7 +389,7 @@ export default function App() {
     return (
       <>
         <GlobalStyles />
-        <SuspendedScreen suspension={DEMO_SUSPENSION} onBack={() => { setLoggedIn(false); navigate('/login'); }} />
+        <SuspendedScreen suspension={DEMO_SUSPENSION} onBack={() => logout()} />
       </>
     );
   }
@@ -272,24 +399,34 @@ export default function App() {
       <>
         <GlobalStyles />
         <AppShell>
-          <LoginScreen onSignIn={() => { setLoggedIn(true); navigate('/'); }} />
+          <LoginScreen onSignIn={handleSignIn} signingIn={signingIn} />
         </AppShell>
+        <Toast message={toast} />
       </>
     );
   }
 
+  const orderProps = {
+    order,
+    onScanQr: () => { setHandover((h) => ({ ...h, role: 'buyer' as const })); navigate('/handover'); },
+    onChat: () => { const l = listings.find((x) => x.id === order?.listingId); if (l) openChat(l); },
+    onCancel: () => { if (order) cancelOrder(order); },
+    onRate: () => setRateOpen(true),
+    onBrowse: () => navigate('/'),
+  };
+
   const profileScreenElement = (
     <ProfileScreen
-      isSelf={viewingSelf}
-      user={viewingSelf ? CURRENT_USER : {
-        name: profileOf ?? '', memberType: 'Student',
-        faculty: selected.faculty ?? '', since: selected.since,
-      }}
-      stats={viewingSelf
-        ? [['SELLER RATING', '4.8★'], ['HANDOVERS', '13'], ['ITEMS BOUGHT', String(PURCHASES.length)], ['AVG REPLY', '12 min']]
-        : [['SELLER RATING', selected.rating + '★'], ['HANDOVERS', selected.handovers], ['REVIEWS', selected.reviewCount], ['AVG REPLY', selected.replyTime]]}
-      listings={viewingSelf ? listings.slice(0, 4) : sellerListings}
-      purchases={PURCHASES}
+      isSelf
+      user={currentUser}
+      stats={[
+        ['SELLER RATING', '—'],
+        ['ACTIVE LISTINGS', mine.filter((l) => l.status === 'Available').length],
+        ['ITEMS BOUGHT', orders.filter((o) => o.status === 'Completed').length],
+        ['JOINED', currentUser.joined || '—'],
+      ]}
+      listings={mine}
+      purchases={purchases}
       reviews={REVIEWS}
       prefs={prefs}
       notificationPrefs={NOTIFICATION_PREFS}
@@ -297,8 +434,8 @@ export default function App() {
       onEditProfile={() => navigate('/account')}
       onWishlist={() => navigate('/wishlist')}
       onSell={() => navigate('/sell')}
-      onChat={() => openChat(selected)}
-      onReport={() => openReport({ type: 'User', title: profileOf ?? undefined, target: profileOf ?? '' })}
+      onChat={() => {}}
+      onReport={() => {}}
       onOpenListing={openListing}
     />
   );
@@ -308,36 +445,36 @@ export default function App() {
       <GlobalStyles />
       <AppShell>
         <TopNav
-          user={CURRENT_USER}
+          user={currentUser}
           query={query}
           onQueryChange={setQuery}
           onSearch={() => navigate('/browse')}
-          orderCount={order ? 1 : 0}
+          orderCount={orders.filter((o) => o.status === 'Reserved').length}
           unreadCount={unread}
           onHome={() => navigate('/')}
           onWishlist={() => navigate('/wishlist')}
           onChat={() => navigate('/chat')}
           onNotifications={() => navigate('/notifications')}
-          onOrders={() => navigate('/order')}
+          onOrders={() => navigate('/orders')}
           onSell={() => navigate('/sell')}
-          onProfile={() => { setProfileOf(null); navigate('/profile'); }}
+          onProfile={() => navigate('/profile')}
         />
 
         <Routes>
           <Route path="/" element={(
             <CatalogScreen
               listings={listings.filter((l) => l.status !== 'Sold').slice(0, 10)}
-              categories={CATEGORIES}
+              categories={categoryNames}
               onOpenListing={openListing}
-              onPickCategory={(c) => { setFilters({ ...filters, cat: c }); setQuery(''); navigate('/browse'); }}
+              onPickCategory={(c) => { setQuery(''); navigate(`/browse?category=${encodeURIComponent(c)}`); }}
               onSeeAll={() => navigate('/browse')}
             />
           )} />
 
           <Route path="/browse" element={(
-            <BrowseScreen
+            <ListingsRoute
               results={results} filters={filters} onFilterChange={setFilters}
-              categories={CATEGORIES} conditions={CONDITIONS} faculties={FACULTIES}
+              categories={categoryNames} conditions={CONDITIONS} faculties={FACULTIES}
               counts={counts} totalCount={listings.length} query={query}
               onOpenListing={openListing} onReset={reset}
             />
@@ -345,7 +482,8 @@ export default function App() {
 
           <Route path="/listing/:id" element={(
             <ListingRoute
-              listings={listings} wishIds={wishIds} setWishIds={setWishIds} setSelectedId={setSelectedId}
+              listings={listings} loaded={listingsLoaded} loadListing={(id) => fetchListing(id, categories)}
+              wishIds={wishIds} setWishIds={setWishIds} setSelectedId={setSelectedId}
               placeOrder={placeOrder} openChat={openChat} openReport={openReport} setBlocked={setBlocked} flash={flash}
             />
           )} />
@@ -353,19 +491,23 @@ export default function App() {
           <Route path="/sell" element={(
             <SellScreen
               form={form} onChange={setForm} onPublish={publish}
-              categories={CATEGORIES} conditions={CONDITIONS} spots={SPOTS}
+              categories={categoryNames} conditions={CONDITIONS} spots={SPOTS}
               onAddPhoto={() => flash('Photo picker — max 6, 5MB each.')}
             />
           )} />
 
           <Route path="/order" element={(
-            <OrderScreen
-              order={order}
-              onScanQr={() => { setHandover((h) => ({ ...h, role: 'buyer' })); navigate('/handover'); }}
-              onChat={() => { const l = listings.find((x) => x.id === order?.listingId); if (l) openChat(l); }}
+            <OrderScreen {...orderProps} />
+          )} />
+          <Route path="/orders" element={<OrdersRoute orders={orders} onBrowse={() => navigate('/browse')} />} />
+          <Route path="/orders/:orderId" element={(
+            <OrderDetailRoute
+              orders={orders}
+              onScanQr={(o) => { setOrder(o); setHandover((h) => ({ ...h, role: 'buyer' as const })); navigate('/handover'); }}
+              onChat={(o) => { const l = listings.find((x) => x.id === o.listingId); if (l) openChat(l); }}
               onCancel={cancelOrder}
-              onRate={() => setRateOpen(true)}
-              onBrowse={() => navigate('/')}
+              onRate={(o) => { setOrder(o); setRateOpen(true); }}
+              onBrowse={() => navigate('/browse')}
             />
           )} />
 
@@ -386,7 +528,7 @@ export default function App() {
                   setReservations((r) => { const n = { ...r }; if (handover.listingId !== null) delete n[handover.listingId]; return n; });
                   setHandover((h) => ({ ...h, stage: { ...h.stage, seller: 'done' } }));
                 }}
-                onCancelReservation={handover.listingId !== null ? () => cancelSellerReservation(handover.listingId as number) : undefined}
+                onCancelReservation={handover.listingId !== null ? () => cancelSellerReservation(handover.listingId as string) : undefined}
                 onChat={() => navigate('/chat')}
                 onRate={() => navigate('/review')}
                 onHome={() => navigate('/')}
@@ -397,7 +539,7 @@ export default function App() {
           <Route path="/review" element={(
             <ReviewScreen
               order={reviewOrder}
-              reviewerName={CURRENT_USER.name}
+              reviewerName={currentUser.name}
               sellerStats={baseStats}
               onGoHandover={() => { setHandover((h) => ({ ...h, role: 'buyer' })); navigate('/handover'); }}
               onHome={() => navigate('/')}
@@ -410,13 +552,29 @@ export default function App() {
           )} />
 
           <Route path="/profile" element={profileScreenElement} />
-          <Route path="/profile/:seller" element={profileScreenElement} />
+          <Route path="/profile/:userId" element={(
+            <SellerProfileRoute
+              listings={listings}
+              loadProfile={fetchProfile}
+              purchases={purchases}
+              reviews={REVIEWS}
+              prefs={prefs}
+              notificationPrefs={NOTIFICATION_PREFS}
+              onTogglePref={(k) => setPrefs((p) => ({ ...p, [k]: !p[k] }))}
+              onEditProfile={() => navigate('/account')}
+              onWishlist={() => navigate('/wishlist')}
+              onSell={() => navigate('/sell')}
+              onChat={(name) => { const l = listings.find((x) => x.seller === name); if (l) openChat(l); }}
+              onReport={(name) => openReport({ type: 'User', title: name, target: name })}
+              onOpenListing={openListing}
+            />
+          )} />
 
           <Route path="/mylistings" element={(
             <MyListingsScreen
               listings={mine} reservations={reservations} conditions={CONDITIONS}
-              onSave={(id, patch) => { setListings((ls) => ls.map((l) => (l.id === id ? { ...l, ...patch } : l))); flash('Listing updated.'); }}
-              onDelete={(id) => { setListings((ls) => ls.filter((l) => l.id !== id)); setWishIds((w) => w.filter((x) => x !== id)); flash('Listing deleted.'); }}
+              onSave={saveListing}
+              onDelete={removeListing}
               onShowQr={(id) => { setHandover((h) => ({ ...h, role: 'seller', listingId: id })); navigate('/handover'); }}
               onCancelReservation={cancelSellerReservation}
               onNew={() => navigate('/sell')}
@@ -425,17 +583,26 @@ export default function App() {
 
           <Route path="/account" element={(
             <AccountScreen
-              user={ACCOUNT_USER} profile={profile} sessions={SESSIONS}
+              user={{ name: currentUser.name, memberType: currentUser.memberType, faculty: currentUser.faculty, email: getCurrentClaims()?.email ?? '' }}
+              profile={profile} sessions={SESSIONS}
               myReports={MY_REPORTS} blocked={blocked}
               listingSummary={`${mine.filter((l) => l.status === 'Available').length} active · ${mine.filter((l) => l.status === 'Reserved').length} reserved · ${mine.filter((l) => l.status === 'Sold').length} sold`}
               openOrderRef={order && order.status === 'Reserved' ? order.reference : null}
-              onSaveProfile={(p) => { setProfile(p); flash('Profile saved.'); }}
+              onSaveProfile={async (p) => {
+                try {
+                  setMe(await updateMyProfile({ contactInfo: p.contact }));
+                  setProfile(p);
+                  flash('Profile saved.');
+                } catch (err) {
+                  flash('Could not save profile: ' + (err instanceof Error ? err.message : 'unknown error'));
+                }
+              }}
               onChangePhoto={() => flash('Photo picker — replaces the directory photo.')}
-              onLogout={() => { setLoggedIn(false); navigate('/login'); flash('Signed out.'); }}
-              onLogoutAll={() => { setLoggedIn(false); navigate('/login'); flash('Signed out on all devices.'); }}
+              onLogout={() => logout('Signed out.')}
+              onLogoutAll={() => logout('Signed out on all devices.')}
               onUnblock={(name) => { setBlocked((b) => b.filter((x) => x.name !== name)); flash(name + ' unblocked.'); }}
               onMyListings={() => navigate('/mylistings')}
-              onDeleteAccount={() => { setLoggedIn(false); navigate('/login'); flash('Account deletion requested.'); }}
+              onDeleteAccount={() => logout('Account deletion requested.')}
             />
           )} />
 
@@ -443,7 +610,7 @@ export default function App() {
             <WishlistScreen
               saved={savedAll.filter((l) => l.status !== 'Sold')}
               autoRemoved={savedAll.filter((l) => l.status === 'Sold')}
-              alerts={alerts} matches={[]} categories={CATEGORIES}
+              alerts={alerts} matches={[]} categories={categoryNames}
               notifyOn={prefs.wishlist}
               onEnableNotify={() => setPrefs((p) => ({ ...p, wishlist: true }))}
               onOpenListing={openListing}
@@ -504,7 +671,7 @@ export default function App() {
 
           <Route path="/admin" element={(
             <AdminCategoriesScreen
-              categories={CATEGORIES.map((c) => ({
+              categories={categoryNames.map((c) => ({
                 id: c, name: c, slug: c.toLowerCase(), count: counts[c] || 0,
               }))}
               onNew={() => flash('New category — name, slug, parent.')}

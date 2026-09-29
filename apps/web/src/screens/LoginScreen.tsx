@@ -9,9 +9,10 @@ const STATS: [string, string][] = [
 
 interface LoginScreenProps {
   onSignIn: () => void;
+  signingIn?: boolean;
 }
 
-export default function LoginScreen({ onSignIn }: LoginScreenProps) {
+export default function LoginScreen({ onSignIn, signingIn = false }: LoginScreenProps) {
   return (
     <div style={{
       display: 'grid', gridTemplateColumns: 'minmax(0,1.05fr) minmax(0,.95fr)',
@@ -65,7 +66,7 @@ export default function LoginScreen({ onSignIn }: LoginScreenProps) {
           Accounts are created only from a verified Chula email domain.
         </div>
 
-        <Button onClick={onSignIn} full style={{
+        <Button onClick={onSignIn} disabled={signingIn} full style={{
           marginTop: 28, display: 'flex', alignItems: 'center',
           justifyContent: 'center', gap: 11,
         }}>
@@ -73,7 +74,7 @@ export default function LoginScreen({ onSignIn }: LoginScreenProps) {
             width: 20, height: 20, borderRadius: 5, background: color.white,
             display: 'grid', placeItems: 'center', font: `700 11px/1 ${font}`, color: color.pink,
           }}>G</span>
-          Continue with Chula Google
+          {signingIn ? 'Signing in…' : 'Continue with Chula Google'}
         </Button>
 
         <div style={{ marginTop: 14, display: 'flex', flexDirection: 'column', gap: 8 }}>
