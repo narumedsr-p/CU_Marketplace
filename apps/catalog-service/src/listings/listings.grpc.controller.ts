@@ -32,6 +32,21 @@ export class ListingsGrpcController {
     return this.toResponse(itemId, () => this.listingsService.markAsSold(itemId));
   }
 
+  @GrpcMethod('CatalogService', 'SuspendItem')
+  async suspendItem({ itemId }: ItemRequest): Promise<ItemResponse> {
+    return this.toResponse(itemId, () => this.listingsService.suspend(itemId));
+  }
+
+  @GrpcMethod('CatalogService', 'SuspendAllUserItems')
+  async suspendAllUserItems({ sellerId }: { sellerId: string }): Promise<{ suspendedCount: number }> {
+    try {
+      const result = await this.listingsService.suspendAllForSeller(sellerId);
+      return { suspendedCount: result.count };
+    } catch (err: any) {
+      throw new RpcException(err.message);
+    }
+  }
+
   private async toResponse(
     itemId: string,
     fn: () => Promise<{ status: string }>,
