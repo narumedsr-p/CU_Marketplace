@@ -154,7 +154,7 @@ export class OrdersService {
 
     const payload = JSON.stringify({ orderId, buyerId: order.buyerId, token });
     const qrImageDataUrl = await QRCode.toDataURL(payload);
-    return { orderId, qrImageDataUrl };
+    return { orderId, qrImageDataUrl, token };
   }
 
   async complete(orderId: string, callerId: string, token: string) {

@@ -8,14 +8,15 @@ import RateSellerDialog from './components/RateSellerDialog';
 import useToast from './hooks/useToast';
 import useCatalogFilters from './hooks/useCatalogFilters';
 import { consumeAuthRedirect, signIn, signOut } from './api/auth';
-import { getCurrentClaims, getCurrentUserId, getToken, onUnauthorized } from './api/client';
+import { ApiError, getCurrentClaims, getCurrentUserId, getToken, onUnauthorized } from './api/client';
 import {
   createListing, deleteListing, fetchCategories, fetchListing, fetchListings, updateListing,
   type ApiCategory,
 } from './api/catalog';
 import { fetchMyProfile, fetchProfile, toUser, updateMyProfile, type ApiProfile } from './api/profiles';
 import {
-  cancelOrder as apiCancelOrder, fetchMyOrders, getPurchasesItem, placeOrder as apiPlaceOrder,
+  cancelOrder as apiCancelOrder, cancelOrderById, completeHandover, fetchMyOrders, fetchOrderStatus,
+  formatHandoverCode, getHandoverQr, getPurchasesItem, normalizeHandoverCode, placeOrder as apiPlaceOrder,
 } from './api/orders';
 
 import LoginScreen from './screens/LoginScreen';
@@ -142,9 +143,9 @@ export default function App() {
 
   const [reportTarget, setReportTarget] = useState<ReportTarget | null>(null);
   const [handover, setHandover] = useState<{
-    role: 'buyer' | 'seller'; listingId: string | null;
-    stage: Record<'buyer' | 'seller', HandoverStage>; codeError: boolean;
-  }>({ role: 'buyer', listingId: null, stage: { buyer: 'ready', seller: 'ready' }, codeError: false });
+    role: 'buyer' | 'seller'; saleId: string | null; code: string | null; codeLoading: boolean;
+    stage: Record<'buyer' | 'seller', HandoverStage>; error: string | null;
+  }>({ role: 'buyer', saleId: null, code: null, codeLoading: false, stage: { buyer: 'ready', seller: 'ready' }, error: null });
 
   const [threads, setThreads] = useState<ChatThread[]>(THREADS);
   const [activeThread, setActiveThread] = useState<number | null>(1);
@@ -262,21 +263,105 @@ export default function App() {
     }
   };
 
-  const completeBuyerOrder = () => {
-    if (!order) return;
-    setListings((ls) => ls.map((l) => (l.id === order.listingId ? { ...l, status: 'Sold' as const } : l)));
-    setOrder((o) => o && { ...o, status: 'Completed' as const, completedAt: 'Today 17:41' });
-    setHandover((h) => ({ ...h, stage: { ...h.stage, buyer: 'done' } }));
-    setRateOpen(true);
-    flash('Handover confirmed. Order closed.');
+  const openBuyerHandover = (target?: Order) => {
+    if (target) setOrder(target);
+    const done = (target ?? order)?.status === 'Completed';
+    setHandover((h) => ({ ...h, role: 'buyer', error: null, stage: { ...h.stage, buyer: done ? 'done' : 'ready' } }));
+    navigate('/handover');
   };
 
+  const openSellerHandover = (saleId: string) => {
+    setHandover((h) => ({
+      ...h, role: 'seller', saleId, code: null, codeLoading: true, error: null, stage: { ...h.stage, seller: 'ready' },
+    }));
+    navigate('/handover');
+  };
+
+  const verifyHandoverCode = async (input: string) => {
+    if (!order) return;
+    const token = normalizeHandoverCode(input);
+    if (!token) {
+      setHandover((h) => ({ ...h, error: 'Enter the 32-character code shown on the seller’s screen.' }));
+      return;
+    }
+    setHandover((h) => ({ ...h, error: null, stage: { ...h.stage, buyer: 'verifying' } }));
+    try {
+      const result = await completeHandover(order.id, token);
+      const completed = { ...order, status: result.status, completedAt: result.completedAt };
+      setOrders((os) => os.map((o) => (o.id === order.id ? completed : o)));
+      setOrder(completed);
+      setListings((ls) => ls.map((l) => (l.id === order.listingId ? { ...l, status: 'Sold' as const } : l)));
+      setHandover((h) => ({ ...h, stage: { ...h.stage, buyer: 'done' } }));
+      setRateOpen(true);
+      flash('Handover confirmed. Order closed.');
+    } catch (err) {
+      const message = err instanceof ApiError && err.status === 400
+        ? 'That code doesn’t match this order. Check with the seller and try again.'
+        : 'Could not confirm handover: ' + (err instanceof Error ? err.message : 'unknown error');
+      setHandover((h) => ({ ...h, error: message, stage: { ...h.stage, buyer: 'ready' } }));
+    }
+  };
+
+  const markSale = (saleId: string, status: Sale['status']) => {
+    setSales((ss) => ss.map((s) => (s.id === saleId ? {
+      ...s, status, action: status === 'Completed' ? 'Sold' : status === 'Cancelled' ? 'Cancelled' : s.action,
+    } : s)));
+  };
+
+  const cancelSale = async (saleId: string) => {
+    try {
+      const status = await cancelOrderById(saleId);
+      markSale(saleId, status);
+      const sale = sales.find((s) => s.id === saleId);
+      if (sale) setListings((ls) => ls.map((l) => (l.id === sale.listingId ? { ...l, status: 'Available' as const } : l)));
+      flash('Reservation cancelled. The item is Available again.');
+      navigate('/mylistings');
+    } catch (err) {
+      flash('Could not cancel reservation: ' + (err instanceof Error ? err.message : 'unknown error'));
+    }
+  };
+
+  const activeSaleFor = (listingId: string) => sales.find((s) => s.listingId === listingId && s.status === 'Reserved');
+
   const cancelSellerReservation = (id: string) => {
+    const sale = activeSaleFor(id);
+    if (sale) { cancelSale(sale.id); return; }
     setListings((ls) => ls.map((l) => (l.id === id ? { ...l, status: 'Available' as const } : l)));
     setReservations((r) => { const n = { ...r }; delete n[id]; return n; });
     flash('Reservation cancelled. The buyer was notified.');
     navigate('/mylistings');
   };
+
+  const handoverSaleId = handover.role === 'seller' ? handover.saleId : null;
+  const onHandoverPage = location.pathname === '/handover';
+
+  useEffect(() => {
+    if (!onHandoverPage || !handoverSaleId) return;
+    let cancelled = false;
+    getHandoverQr(handoverSaleId)
+      .then(({ token }) => { if (!cancelled) setHandover((h) => ({ ...h, code: token, codeLoading: false })); })
+      .catch((err) => {
+        if (!cancelled) {
+          setHandover((h) => ({
+            ...h, codeLoading: false, error: 'Could not get the handover code: ' + (err instanceof Error ? err.message : 'unknown error'),
+          }));
+        }
+      });
+    const poll = setInterval(async () => {
+      try {
+        const status = await fetchOrderStatus(handoverSaleId);
+        if (cancelled || status === 'Reserved') return;
+        clearInterval(poll);
+        markSale(handoverSaleId, status);
+        if (status === 'Completed') {
+          setHandover((h) => ({ ...h, stage: { ...h.stage, seller: 'done' } }));
+        } else {
+          setHandover((h) => ({ ...h, error: 'This order was cancelled. The item is Available again.' }));
+        }
+      } catch { }
+    }, 4000);
+    return () => { cancelled = true; clearInterval(poll); };
+  }, [onHandoverPage, handoverSaleId]);
 
   const publish = async () => {
     if (!form.title.trim() || !form.price) { flash('Title and price are required.'); return; }
@@ -379,11 +464,11 @@ export default function App() {
     reference: order.reference, handoverCode: order.handoverCode, title: order.title,
     price: order.price, seller: order.seller, buyer: currentUser.name, spot: order.spot, window: order.window,
   } : null;
-  const sellerListing = listings.find((l) => l.id === handover.listingId);
-  const sellerRes = handover.listingId !== null ? reservations[handover.listingId] : undefined;
-  const sellerHandover: HandoverOrder | null = sellerListing && sellerRes ? {
-    reference: sellerRes.reference, handoverCode: 'RSA-SELLER-CODE', title: sellerListing.title,
-    price: sellerListing.price, seller: currentUser.name, buyer: sellerRes.buyer, spot: sellerRes.spot, window: sellerRes.window,
+  const sellerSale = sales.find((s) => s.id === handover.saleId);
+  const sellerHandover: HandoverOrder | null = sellerSale ? {
+    reference: 'ORD-' + sellerSale.id.slice(0, 8).toUpperCase(),
+    handoverCode: handover.code ? formatHandoverCode(handover.code) : '', title: sellerSale.title,
+    price: sellerSale.price, seller: currentUser.name, buyer: sellerSale.buyer, spot: sellerSale.spot, window: '—',
   } : null;
 
   const reviewOrder = order && !order.rated
@@ -417,7 +502,7 @@ export default function App() {
 
   const orderProps = {
     order,
-    onScanQr: () => { setHandover((h) => ({ ...h, role: 'buyer' as const })); navigate('/handover'); },
+    onScanQr: () => openBuyerHandover(),
     onChat: () => { const l = listings.find((x) => x.id === order?.listingId); if (l) openChat(l); },
     onCancel: () => { if (order) cancelOrder(order); },
     onRate: () => setRateOpen(true),
@@ -437,6 +522,7 @@ export default function App() {
       listings={mine}
       purchases={purchases}
       sales={sales}
+      onShowHandoverCode={(sale) => openSellerHandover(sale.id)}
       reviews={REVIEWS}
       prefs={prefs}
       notificationPrefs={NOTIFICATION_PREFS}
@@ -513,7 +599,7 @@ export default function App() {
           <Route path="/orders/:orderId" element={(
             <OrderDetailRoute
               orders={orders}
-              onScanQr={(o) => { setOrder(o); setHandover((h) => ({ ...h, role: 'buyer' as const })); navigate('/handover'); }}
+              onScanQr={(o) => openBuyerHandover(o)}
               onChat={(o) => { const l = listings.find((x) => x.id === o.listingId); if (l) openChat(l); }}
               onCancel={cancelOrder}
               onRate={(o) => { setOrder(o); setRateOpen(true); }}
@@ -528,17 +614,11 @@ export default function App() {
             return (
               <HandoverScreen
                 role={isSeller ? 'seller' : 'buyer'} order={o}
-                stage={handover.stage[isSeller ? 'seller' : 'buyer']} codeError={handover.codeError}
-                onRoleChange={sellerHandover && buyerHandover ? (r) => setHandover((h) => ({ ...h, role: r })) : undefined}
-                onScan={() => { setHandover((h) => ({ ...h, stage: { ...h.stage, buyer: 'verifying' } })); setTimeout(completeBuyerOrder, 1000); }}
-                onVerifyCode={(code) => (order && code === order.handoverCode ? completeBuyerOrder() : setHandover((h) => ({ ...h, codeError: true })))}
-                onSimulateScan={() => {
-                  if (handover.listingId === null) return;
-                  setListings((ls) => ls.map((l) => (l.id === handover.listingId ? { ...l, status: 'Sold' as const } : l)));
-                  setReservations((r) => { const n = { ...r }; if (handover.listingId !== null) delete n[handover.listingId]; return n; });
-                  setHandover((h) => ({ ...h, stage: { ...h.stage, seller: 'done' } }));
-                }}
-                onCancelReservation={handover.listingId !== null ? () => cancelSellerReservation(handover.listingId as string) : undefined}
+                stage={handover.stage[isSeller ? 'seller' : 'buyer']} error={handover.error}
+                codeLoading={isSeller ? handover.codeLoading : false}
+                onRoleChange={sellerHandover && buyerHandover ? (r) => setHandover((h) => ({ ...h, role: r, error: null })) : undefined}
+                onVerifyCode={verifyHandoverCode}
+                onCancelReservation={isSeller && sellerSale?.status === 'Reserved' ? () => cancelSale(sellerSale.id) : undefined}
                 onChat={() => navigate('/chat')}
                 onRate={() => navigate('/review')}
                 onHome={() => navigate('/')}
@@ -551,7 +631,7 @@ export default function App() {
               order={reviewOrder}
               reviewerName={currentUser.name}
               sellerStats={baseStats}
-              onGoHandover={() => { setHandover((h) => ({ ...h, role: 'buyer' })); navigate('/handover'); }}
+              onGoHandover={() => openBuyerHandover()}
               onHome={() => navigate('/')}
               onSubmit={() => {
                 if (order && order.status === 'Completed') setOrder((o) => o && { ...o, rated: true });
@@ -585,7 +665,11 @@ export default function App() {
               listings={mine} reservations={reservations} conditions={CONDITIONS}
               onSave={saveListing}
               onDelete={removeListing}
-              onShowQr={(id) => { setHandover((h) => ({ ...h, role: 'seller', listingId: id })); navigate('/handover'); }}
+              onShowQr={(id) => {
+                const sale = activeSaleFor(id);
+                if (sale) openSellerHandover(sale.id);
+                else flash('No active order for this listing yet.');
+              }}
               onCancelReservation={cancelSellerReservation}
               onNew={() => navigate('/sell')}
             />

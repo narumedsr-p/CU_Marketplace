@@ -24,6 +24,7 @@ interface ProfileScreenProps {
   listings: Listing[];
   purchases?: Purchase[];
   sales?: Sale[];
+  onShowHandoverCode?: (sale: Sale) => void;
   reviews?: Review[];
   prefs?: NotificationPrefsState;
   onTogglePref: (key: string) => void;
@@ -42,7 +43,7 @@ interface ProfileScreenProps {
  *   other profile -> Chat with seller, Report; Listings + Reviews only
  */
 export default function ProfileScreen({
-  user, isSelf, stats, listings, purchases = [], sales = [], reviews = [],
+  user, isSelf, stats, listings, purchases = [], sales = [], onShowHandoverCode, reviews = [],
   prefs = {}, onTogglePref, notificationPrefs = [],
   onEditProfile, onWishlist, onSell, onChat, onReport, onOpenListing,
 }: ProfileScreenProps) {
@@ -137,7 +138,12 @@ export default function ProfileScreen({
           <OrderTable
             intro="Your items that other people have reserved or bought, including cancelled orders. Only you can see this tab."
             headers={['ITEM', 'BUYER', 'DATE', 'PRICE', 'STATUS']}
-            rows={sales.map((s) => ({ ...s, party: s.buyer }))}
+            rows={sales.map((s) => ({
+              ...s,
+              party: s.buyer,
+              onAction: s.status === 'Reserved' && onShowHandoverCode ? () => onShowHandoverCode(s) : undefined,
+              actionLabel: 'Show handover code',
+            }))}
           />
         )}
 
@@ -208,6 +214,8 @@ interface OrderRow {
   price: number;
   status: ListingStatus;
   action: string;
+  onAction?: () => void;
+  actionLabel?: string;
 }
 
 function OrderTable({ intro, headers, rows }: { intro: string; headers: string[]; rows: OrderRow[] }) {
@@ -257,6 +265,9 @@ function Row({ p }: { p: OrderRow }) {
       <div style={{ ...cell, flexDirection: 'column' as const, gap: 6, justifyContent: 'center', alignItems: 'flex-start' }}>
         <StatusBadge status={p.status} />
         <span style={{ font: `500 11.5px/1.3 ${font}`, color: color.faint }}>{p.action}</span>
+        {p.onAction && (
+          <Button size="sm" variant="ink" onClick={p.onAction}>{p.actionLabel ?? p.action}</Button>
+        )}
       </div>
     </>
   );
