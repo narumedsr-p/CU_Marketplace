@@ -11,10 +11,19 @@ A Turborepo monorepo scaffold for a campus marketplace platform, built as an API
 
 ### Auth flow
 
-1. Client calls `GET /auth/callback` on the gateway (public route) and receives a signed dummy JWT with mock student claims.
-2. Client sends `Authorization: Bearer <token>` on subsequent requests.
-3. `GatewayAuthGuard` verifies the token and injects `x-user-id` / `x-user-role` headers onto the request before it's proxied downstream.
-4. Downstream services trust those headers and read them via the `@CurrentUser()` decorator — they never verify JWTs themselves.
+Login is Google OAuth only, gated to `ALLOWED_EMAIL_DOMAIN` (default `chula.ac.th`, subdomains like `student.chula.ac.th` also accepted):
+
+1. `GET /auth/google` — redirects to Google's OAuth consent screen, with a CSRF `state` token set in an httpOnly cookie.
+2. `GET /auth/google/callback` — verifies the `state` cookie, exchanges the code and verifies the ID token's signature via `google-auth-library`, rejects unless the email is verified *and* its domain (or a subdomain of it) matches `ALLOWED_EMAIL_DOMAIN` (the `hd` hint from step 1 alone isn't trusted), finds-or-creates a `UserProfile` by email in `profile-service` (`POST /oauth-login`, internal-only), then signs a JWT and redirects the browser to `${FRONTEND_URL}/?token=<jwt>`.
+
+Requires `GOOGLE_CLIENT_ID`/`GOOGLE_CLIENT_SECRET` from Google Cloud Console (APIs & Services → Credentials → OAuth client ID → Web application), with `GOOGLE_CALLBACK_URL` added as an authorized redirect URI — without these, no login path works in this scaffold.
+
+From there:
+1. Client sends `Authorization: Bearer <token>` on subsequent requests.
+2. `GatewayAuthGuard` verifies the token and injects `x-user-id` / `x-user-role` headers onto the request before it's proxied downstream.
+3. Downstream services trust those headers and read them via the `@CurrentUser()` decorator — they never verify JWTs themselves.
+
+Identity mapping: `UserProfile.email` (unique) maps a Google email to its `userId`, created once on first login and reused on every subsequent login for that email — chosen over a deterministic hash so the mapping can change later (email changes, account merges) without breaking existing user IDs.
 
 ## Service & Port Map
 
@@ -27,10 +36,10 @@ A Turborepo monorepo scaffold for a campus marketplace platform, built as an API
 | chat-service            | 3003      | 4003      | `cu_chat_db`           |
 | wishlist-service        | 3004      | 4004      | `cu_wishlist_db`       |
 | review-service          | 3005      | —         | `cu_review_db`         |
-| moderation-service      | 3006      | —         | `cu_moderation_db`     |
+| profile-service         | 3006      | —         | `cu_profile_db`        |
 | notification-service    | 3007      | 4007      | `cu_notification_db`   |
 
-`review-service` and `moderation-service` have no gRPC port — they only ever *call* other services' internal gRPC endpoints, they don't expose any of their own.
+`review-service` has no gRPC port — it only *calls* other services' internal gRPC endpoints, it doesn't expose any of its own. `profile-service` has no gRPC involvement at all (pure REST CRUD, no cross-service calls).
 
 ## Repository Structure
 
@@ -43,7 +52,7 @@ apps/
   chat-service/           Conversations & messages, calls notification
   wishlist-service/       Wishlist items, auto-match, calls catalog/notification
   review-service/         Reviews, calls order/notification
-  moderation-service/     Reports, audit logs, calls catalog/order/chat/notification
+  profile-service/        User profiles (no cross-service calls)
   notification-service/   Notifications & preferences
 libs/
   contracts/              Shared @workspace/contracts package (UserClaims only)
@@ -56,7 +65,7 @@ init-multiple-dbs.sh       Creates all 7 databases on container init
 
 ### Prerequisites
 
-- Node.js 20+
+- Node.js 22.12+ (see `.nvmrc`) — older 22.x builds hit an upstream Prisma bug where its query compiler's ESM runtime file can't be `require()`'d; `require(esm)` only became stable in 22.12
 - pnpm
 - Docker (for local Postgres)
 
@@ -70,11 +79,14 @@ This spins up a single Postgres 16 instance on `localhost:5432` and provisions a
 
 ### 2. Configure environment variables
 
-Each service has a `.env.example` — copy it to `.env` inside that service's directory:
+Copy the repo-root `.env.example` (shared secrets, e.g. `INTERNAL_SERVICE_SECRET`) and each service's own `.env.example` (its local overrides — `DATABASE_URL`, `PORT`, etc.):
 
 ```bash
-for d in apps/*-service; do cp "$d/.env.example" "$d/.env"; done
+cp .env.example .env
+for d in apps/*-service apps/api-gateway; do cp "$d/.env.example" "$d/.env"; done
 ```
+
+Login only works once you fill in real `GOOGLE_CLIENT_ID`/`GOOGLE_CLIENT_SECRET` in `apps/api-gateway/.env` — see [Auth flow](#auth-flow) for where to get them.
 
 ### 3. Install dependencies
 
@@ -103,7 +115,7 @@ Starts every app in watch mode via Turborepo. The gateway listens on `:3000`, ea
 Every internal-only endpoint (blocked from public access at the gateway — reserving/suspending items, cancelling orders, pushing notifications, blocking chat rooms, evaluating wishlist matches, etc.) runs over gRPC instead of REST. Public endpoints that happen to be reused internally (e.g. `GET /items/:id`) stay REST, since browsers can't speak gRPC directly.
 
 - **Proto files**: `libs/contracts/proto/*.proto` — one file per receiving service, shared by both the server and every calling client.
-- **Hybrid bootstrap**: each of `catalog`, `chat`, `order`, `wishlist`, `notification` runs an HTTP server (public REST via the gateway) *and* a gRPC server (`app.connectMicroservice(...)` + `app.startAllMicroservices()` in `main.ts`) side by side, on the ports in the table above. `review-service` and `moderation-service` are gRPC clients only — they don't expose a gRPC server of their own.
+- **Hybrid bootstrap**: each of `catalog`, `order`, `wishlist`, `notification` runs an HTTP server (public REST via the gateway) *and* a gRPC server (`app.connectMicroservice(...)` + `app.startAllMicroservices()` in `main.ts`) side by side, on the ports in the table above. `chat-service` and `review-service` are gRPC clients only — they don't expose a gRPC server of their own. `profile-service` has no gRPC involvement at all.
 - **Auth**: the shared `x-internal-key` secret travels as gRPC metadata instead of an HTTP header. Each gRPC-serving app has its own `GrpcInternalAuthGuard` (`common/guards/grpc-internal-auth.guard.ts`), separate from the HTTP `InternalAuthGuard` — the HTTP guard early-returns on non-HTTP contexts so it doesn't crash when a gRPC call comes in.
 - **Client pattern**: `src/clients/*.ts` files inject `ClientGrpc` via a module-level `ClientsModule.register(...)`, resolve the typed service in `onModuleInit()`, and call methods wrapped in `firstValueFrom(...)` — the same shape as the old axios-based clients, so calling code elsewhere didn't need to change.
 - **Docs**: `pnpm docs:grpc` (needs `protoc` + `protoc-gen-doc` installed locally) regenerates a single combined HTML doc from all `.proto` files into `libs/contracts/proto/generated/index.html`, served by the gateway at `/api/v1/docs-grpc`. It's a static snapshot — rerun the command after editing any `.proto` file. There's no gRPC server reflection wired in, so live tools (`grpcui`, `grpcurl`, Postman) need the `.proto` file passed in explicitly rather than auto-discovering the schema.
