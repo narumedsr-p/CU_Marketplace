@@ -31,8 +31,12 @@ export class ListingsService {
     return this.prisma.item.findMany({ where });
   }
 
-  findOne(id: string) {
-    return this.prisma.item.findUnique({ where: { id } });
+  async findOne(id: string) {
+    const item = await this.prisma.item.findUnique({ where: { id } });
+    if (!item || item.status !== "Available") {
+      throw new NotFoundException("Item not found");
+    }
+    return item;
   }
 
   async create(data: any) {
