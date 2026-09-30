@@ -97,7 +97,7 @@ export default function LoginScreen({ onSignIn, signingIn = false }: LoginScreen
             font: `400 12.5px/1.6 ${font}`, color: color.muted, marginTop: 5, textWrap: 'pretty',
           }}>
             Your profile is generated from the directory — name, member type, faculty and photo.
-            You can edit contact and bio later.
+            You can edit your contact later.
           </div>
         </div>
       </div>

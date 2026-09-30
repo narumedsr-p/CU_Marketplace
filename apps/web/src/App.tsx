@@ -154,7 +154,7 @@ export default function App() {
   const [cases, setCases] = useState<ModerationCase[]>(MODERATION_CASES);
   const [reservations, setReservations] = useState<Record<string, SellerReservation>>(RESERVATIONS);
   const [alerts, setAlerts] = useState<AutoMatchAlert[]>(AUTO_MATCH_ALERTS);
-  const [profile, setProfile] = useState<AccountProfile>({ bio: '', contact: '' });
+  const [profile, setProfile] = useState<AccountProfile>({ contact: '' });
 
   const { toast, flash } = useToast();
   const { filters, setFilters, results, counts, reset } = useCatalogFilters(listings, query);

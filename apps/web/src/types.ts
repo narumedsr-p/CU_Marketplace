@@ -205,7 +205,6 @@ export interface AccountUser {
 }
 
 export interface AccountProfile {
-  bio: string;
   contact: string;
 }
 

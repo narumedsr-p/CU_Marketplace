@@ -25,7 +25,7 @@ interface AccountScreenProps {
 
 // Account settings (FR 1.5–1.8, 7.2, 7.3).
 export default function AccountScreen({
-  user, profile = { bio: '', contact: '' }, sessions = [], myReports = [], blocked = [],
+  user, profile = { contact: '' }, sessions = [], myReports = [], blocked = [],
   listingSummary, openOrderRef,
   onSaveProfile, onChangePhoto, onLogout, onLogoutAll, onUnblock, onMyListings, onDeleteAccount,
 }: AccountScreenProps) {
@@ -64,9 +64,6 @@ export default function AccountScreen({
             </div>
             <div style={{ font: `400 11.5px/1.5 ${font}`, color: color.faint, marginTop: 7 }}>These come from the CU directory and can't be edited here.</div>
             <div style={{ marginTop: 16 }}>
-              <Field label="Bio" as="textarea" rows={3} value={draft.bio} onChange={(e: ChangeEvent<HTMLTextAreaElement>) => setDraft({ ...draft, bio: e.target.value })} />
-            </div>
-            <div style={{ marginTop: 12 }}>
               <Field label="Contact" placeholder="LINE ID or phone" value={draft.contact} onChange={(e: ChangeEvent<HTMLInputElement>) => setDraft({ ...draft, contact: e.target.value })} />
             </div>
             <Button full size="sm" onClick={() => onSaveProfile(draft)} style={{ marginTop: 14, padding: 12 }}>Save profile</Button>
