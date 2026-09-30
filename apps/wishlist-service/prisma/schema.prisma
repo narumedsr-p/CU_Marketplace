@@ -1,10 +1,12 @@
 generator client {
-  provider = "prisma-client"
-  output   = "../src/generated/prisma-client"
+  provider        = "prisma-client"
+  output          = "../src/generated/prisma-client"
+  previewFeatures = ["postgresqlExtensions"]
 }
 
 datasource db {
-  provider = "postgresql"
+  provider   = "postgresql"
+  extensions = [pgTrgm]
 }
 
 model Wishlist {
@@ -25,6 +27,8 @@ model MatchRule {
   matches    MatchRecord[]
   createdAt  DateTime      @default(now()) @map("created_at")
   updatedAt  DateTime      @updatedAt @map("updated_at")
+
+  @@index([keyword(ops: raw("gin_trgm_ops"))], type: Gin, map: "MatchRule_keyword_trgm_idx")
 }
 
 model MatchRecord {
