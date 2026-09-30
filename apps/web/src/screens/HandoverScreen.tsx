@@ -8,8 +8,8 @@ import HandoverQr from '../components/HandoverQr';
 import type { HandoverOrder, HandoverRole, HandoverStage } from '../types';
 
 const CHECKS: Record<HandoverRole, string[]> = {
-  buyer: ['Item matches the listing photos', 'You tested that it works', 'Scanning completes the sale — only scan when satisfied'],
-  seller: ['Bring the item and its accessories', 'Let the buyer inspect it before scanning', 'Keep your screen bright for the QR'],
+  buyer: ['Item matches the listing photos', 'You tested that it works', 'Entering the code completes the sale — only enter it when satisfied'],
+  seller: ['Bring the item and its accessories', 'Let the buyer inspect it before giving the code', 'Only share the code in person'],
 };
 
 interface HandoverScreenProps {
@@ -17,10 +17,9 @@ interface HandoverScreenProps {
   onRoleChange?: (role: HandoverRole) => void;
   order: HandoverOrder;
   stage?: HandoverStage;
-  codeError?: boolean;
-  onScan: () => void;
+  error?: string | null;
+  codeLoading?: boolean;
   onVerifyCode: (code: string) => void;
-  onSimulateScan?: () => void;
   onCancelReservation?: () => void;
   onChat: () => void;
   onRate: () => void;
@@ -29,8 +28,8 @@ interface HandoverScreenProps {
 
 // QR handover (FR 2.3–2.5). The SELLER shows the QR; the BUYER scans it.
 export default function HandoverScreen({
-  role = 'buyer', onRoleChange, order, stage = 'ready', codeError,
-  onScan, onVerifyCode, onSimulateScan, onCancelReservation, onChat, onRate, onHome,
+  role = 'buyer', onRoleChange, order, stage = 'ready', error, codeLoading,
+  onVerifyCode, onCancelReservation, onChat, onRate, onHome,
 }: HandoverScreenProps) {
   const [code, setCode] = useState('');
   const [checks, setChecks] = useState([false, false, false]);
@@ -58,7 +57,7 @@ export default function HandoverScreen({
       <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: 14, flexWrap: 'wrap' }}>
         <div>
           <div style={pageTitle}>Handover · {order.reference}</div>
-          <div style={pageSub}>The seller shows the QR. The buyer scans it to close the order.</div>
+          <div style={pageSub}>The seller shows the handover code. The buyer enters it to close the order.</div>
         </div>
         {onRoleChange && (
           <Segmented value={role} onChange={(v) => onRoleChange(v as HandoverRole)} options={[{ value: 'buyer', label: 'I’m the buyer' }, { value: 'seller', label: 'I’m the seller' }]} />
@@ -69,22 +68,37 @@ export default function HandoverScreen({
         <div style={{ ...card, borderRadius: 14, padding: isSeller ? 22 : 18, textAlign: isSeller ? 'center' : 'left' }}>
           {isSeller && !done && (
             <>
-              <HandoverQr code={order.handoverCode} />
-              <div style={{ font: `700 19px/1 ${font}`, letterSpacing: '.16em', marginTop: 16 }}>{order.handoverCode}</div>
-              <div style={{ font: `400 12.5px/1.6 ${font}`, color: color.muted, marginTop: 8, textWrap: 'pretty' }}>
-                Show this to {order.buyer}. Single-use — it stops working once scanned or when the pickup window ends.
-              </div>
-              <div style={{ display: 'flex', gap: 8, justifyContent: 'center', flexWrap: 'wrap', marginTop: 16 }}>
-                {onSimulateScan && <Button size="sm" variant="ghost" onClick={onSimulateScan} style={{ borderStyle: 'dashed' }}>Demo: simulate buyer scan</Button>}
-                {onCancelReservation && <Button size="sm" variant="ghost" onClick={onCancelReservation}>Cancel reservation</Button>}
-              </div>
+              <div style={labelStyle}>Handover code</div>
+              {codeLoading ? (
+                <div style={{ font: `500 13px/1.6 ${font}`, color: color.muted, padding: '28px 0' }}>Generating code…</div>
+              ) : error ? (
+                <div style={{ font: `500 13px/1.6 ${font}`, color: '#A11B3C', padding: '28px 0' }}>{error}</div>
+              ) : (
+                <>
+                  <div style={{ marginTop: 14 }}>
+                    <HandoverQr code={order.handoverCode} />
+                  </div>
+                  <div style={{
+                    font: `700 22px/1.5 ui-monospace, monospace`, letterSpacing: '.08em', marginTop: 14,
+                    padding: '16px 12px', borderRadius: 12, border: '1px solid ' + color.line, wordSpacing: '.2em',
+                  }}>{order.handoverCode}</div>
+                  <div style={{ font: `400 12.5px/1.6 ${font}`, color: color.muted, marginTop: 10, textWrap: 'pretty' }}>
+                    Give this code to {order.buyer} after they check the item. It works once. This page updates when the sale completes.
+                  </div>
+                </>
+              )}
+              {onCancelReservation && (
+                <div style={{ display: 'flex', gap: 8, justifyContent: 'center', flexWrap: 'wrap', marginTop: 16 }}>
+                  <Button size="sm" variant="ghost" onClick={onCancelReservation}>Cancel reservation</Button>
+                </div>
+              )}
             </>
           )}
-          {isSeller && done && doneBlock('Buyer scanned — sale complete', 'Listing marked Sold. The buyer is asked to rate you.')}
+          {isSeller && done && doneBlock('Buyer entered the code — sale complete', 'Listing marked Sold. The buyer is asked to rate you.')}
 
           {!isSeller && !done && (
             <>
-              <div style={{ position: 'relative', aspectRatio: '1/1', maxWidth: 320, margin: '0 auto', borderRadius: 14, background: color.ink, overflow: 'hidden' }}>
+              <div style={{ position: 'relative', aspectRatio: '1/1', maxWidth: 320, margin: '0 auto 18px', borderRadius: 14, background: color.ink, overflow: 'hidden' }}>
                 <div style={{ position: 'absolute', inset: '18%', border: '2px solid rgba(255,255,255,.18)', borderRadius: 10 }} />
                 {['tl', 'tr', 'bl', 'br'].map((p) => <div key={p} style={corner(p)} />)}
                 <div style={{ position: 'absolute', left: '20%', right: '20%', top: '50%', height: 2, background: color.pinkLight, boxShadow: '0 0 12px ' + color.pinkLight }} />
@@ -92,22 +106,25 @@ export default function HandoverScreen({
                   {verifying ? 'Verifying code…' : 'Point at the seller’s QR'}
                 </div>
               </div>
-              <Button full onClick={onScan} disabled={verifying} style={{ marginTop: 14 }}>{verifying ? 'Verifying…' : 'Scan seller’s QR'}</Button>
-              <div style={{ ...labelStyle, marginTop: 18 }}>Camera not working? Enter the code</div>
-              <form onSubmit={(e: FormEvent) => { e.preventDefault(); onVerifyCode(code.trim().toUpperCase()); }} style={{ display: 'flex', gap: 8, marginTop: 9 }}>
+              <div style={labelStyle}>Enter the seller’s handover code</div>
+              <div style={{ font: `400 12.5px/1.6 ${font}`, color: color.muted, marginTop: 6, textWrap: 'pretty' }}>
+                Ask {order.seller} for the code once you have checked the item. Entering it completes the sale.
+              </div>
+              <form onSubmit={(e: FormEvent) => { e.preventDefault(); onVerifyCode(code); }} style={{ display: 'flex', gap: 8, marginTop: 12 }}>
                 <input
                   value={code}
-                  onChange={(e: ChangeEvent<HTMLInputElement>) => setCode(e.target.value.toUpperCase())}
-                  placeholder="RSA-XXXX-XX"
+                  onChange={(e: ChangeEvent<HTMLInputElement>) => setCode(e.target.value)}
+                  placeholder="XXXX XXXX XXXX XXXX XXXX XXXX XXXX XXXX"
+                  disabled={verifying}
                   style={{
-                    flex: 1, minWidth: 0, padding: '11px 13px', borderRadius: 10, outline: 'none', letterSpacing: '.1em',
-                    border: '1px solid ' + (codeError ? '#A11B3C' : color.field), font: `600 14px/1 ${font}`,
+                    flex: 1, minWidth: 0, padding: '11px 13px', borderRadius: 10, outline: 'none', letterSpacing: '.04em',
+                    border: '1px solid ' + (error ? '#A11B3C' : color.field), font: `600 13px/1 ui-monospace, monospace`,
                   }}
                 />
-                <Button type="submit" size="sm" variant="ink">Verify</Button>
+                <Button type="submit" size="sm" variant="ink" disabled={verifying}>{verifying ? 'Verifying…' : 'Verify'}</Button>
               </form>
-              {codeError && (
-                <div style={{ font: `500 12.5px/1.5 ${font}`, color: '#A11B3C', marginTop: 7 }}>That code doesn't match this order. Check with the seller and try again.</div>
+              {error && (
+                <div style={{ font: `500 12.5px/1.5 ${font}`, color: '#A11B3C', marginTop: 7 }}>{error}</div>
               )}
             </>
           )}

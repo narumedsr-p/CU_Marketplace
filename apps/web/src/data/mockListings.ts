@@ -56,7 +56,6 @@ export const ACCOUNT_USER: AccountUser = {
 };
 
 export const ACCOUNT_PROFILE: AccountProfile = {
-  bio: 'Engineering year 2. Usually free after 4 pm near Sala Phra Kiao.',
   contact: 'LINE: poonnawit.s',
 };
 

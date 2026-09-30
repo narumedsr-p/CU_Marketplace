@@ -51,6 +51,18 @@ export interface Purchase {
   spot: string;
 }
 
+export interface Sale {
+  id: string;
+  listingId: string;
+  title: string;
+  price: number;
+  buyer: string;
+  when: string;
+  status: ListingStatus;
+  action: string;
+  spot: string;
+}
+
 export interface Review {
   id: string;
   name: string;
@@ -193,7 +205,6 @@ export interface AccountUser {
 }
 
 export interface AccountProfile {
-  bio: string;
   contact: string;
 }
 

@@ -8,7 +8,10 @@ import { ProfileClient } from './profile.client';
 @Injectable()
 export class AuthService {
   private readonly frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
-  private readonly allowedEmailDomain = process.env.ALLOWED_EMAIL_DOMAIN || 'chula.ac.th';
+  private readonly allowedEmailDomains = (process.env.ALLOWED_EMAIL_DOMAIN || 'chula.ac.th')
+    .split(',')
+    .map((d) => d.trim().toLowerCase())
+    .filter(Boolean);
   private readonly googleCallbackUrl =
     process.env.GOOGLE_CALLBACK_URL || 'http://localhost:3000/auth/google/callback';
   private readonly googleClient = new OAuth2Client(
@@ -34,10 +37,12 @@ export class AuthService {
       scope: 'openid email profile',
       // `hd` is only a UX hint (pre-fills/nudges the account picker) — Google warns it's
       // not a security guarantee, so the actual email suffix is re-checked below.
-      hd: this.allowedEmailDomain,
       state,
       prompt: 'select_account',
     });
+    if (this.allowedEmailDomains.length === 1) {
+      params.set('hd', this.allowedEmailDomains[0]);
+    }
     return { url: `https://accounts.google.com/o/oauth2/v2/auth?${params.toString()}`, state };
   }
 
@@ -98,7 +103,9 @@ export class AuthService {
   // `endsWith('@' + domain)` would also wrongly accept a spoofed 'x@evilchula.ac.th'.
   private isAllowedDomain(email: string): boolean {
     const domain = email.toLowerCase().split('@').pop() ?? '';
-    return domain === this.allowedEmailDomain || domain.endsWith(`.${this.allowedEmailDomain}`);
+    return this.allowedEmailDomains.some(
+      (allowed) => domain === allowed || domain.endsWith(`.${allowed}`),
+    );
   }
 
   private async findOrCreateProfileByEmail(
