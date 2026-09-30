@@ -5,9 +5,21 @@ import {
   Logger,
   NotFoundException,
 } from '@nestjs/common';
-import { PrismaClient } from '../generated/prisma-client/client';
+import { Prisma, PrismaClient } from '../generated/prisma-client/client';
 import { PrismaPg } from '@prisma/adapter-pg';
 import { NotificationClient } from '../clients/notification.client';
+
+const ANY_CATEGORY_ID = '00000000-0000-0000-0000-000000000000';
+// word_similarity() weight applied to description matches, mirroring the old
+// title(0.85)/description(0.65) split now that both use a continuous score.
+const DESCRIPTION_WEIGHT = 0.8;
+
+interface MatchCandidate {
+  id: string;
+  userId: string;
+  keyword: string;
+  matchScore: number;
+}
 
 @Injectable()
 export class AutoMatchService {
@@ -119,68 +131,61 @@ export class AutoMatchService {
       return { evaluated: false, matchedCount: 0 };
     }
 
-    const rules = await this.prisma.matchRule.findMany({
-      where: { isActive: true },
-    });
+    const description = item.description ?? '';
+
+    // Rule's category must be the "any" sentinel, or match the item's category,
+    // unless the item has no category at all (kept permissive, as before).
+    const categoryFilter = item.categoryId
+      ? Prisma.sql`AND ("category_id" = ${ANY_CATEGORY_ID}::uuid OR "category_id" = ${item.categoryId}::uuid)`
+      : Prisma.empty;
+
+    const scoreExpr = Prisma.sql`GREATEST(
+        word_similarity("keyword", ${item.title}),
+        word_similarity("keyword", ${description}) * ${DESCRIPTION_WEIGHT}
+      )`;
+
+    const candidates = await this.prisma.$queryRaw<MatchCandidate[]>(Prisma.sql`
+      SELECT
+        "rule_id" AS "id",
+        "user_id" AS "userId",
+        "keyword",
+        ${scoreExpr} AS "matchScore"
+      FROM "MatchRule"
+      WHERE "is_active" = true
+        AND "user_id" != ${item.sellerId}::uuid
+        ${categoryFilter}
+        AND ${scoreExpr} >= "min_score"
+    `);
 
     let matchedCount = 0;
-    const titleLower = (item.title || '').toLowerCase();
-    const descLower = (item.description || '').toLowerCase();
 
-    for (const rule of rules) {
-      if (rule.userId === item.sellerId) {
-        continue;
-      }
+    for (const candidate of candidates) {
+      const existingRecord = await this.prisma.matchRecord.findFirst({
+        where: { ruleId: candidate.id, matchedItemId: item.id },
+      });
 
-      if (
-        rule.categoryId &&
-        rule.categoryId !== '00000000-0000-0000-0000-000000000000' &&
-        item.categoryId &&
-        rule.categoryId !== item.categoryId
-      ) {
-        continue;
-      }
-
-      const keywordLower = rule.keyword.toLowerCase();
-      let matchScore = 0;
-
-      if (titleLower === keywordLower) {
-        matchScore = 1.0;
-      } else if (titleLower.includes(keywordLower)) {
-        matchScore = 0.85;
-      } else if (descLower.includes(keywordLower)) {
-        matchScore = 0.65;
-      }
-
-      const minScore = Number(rule.minScore);
-      if (matchScore >= minScore) {
-        const existingRecord = await this.prisma.matchRecord.findFirst({
-          where: { ruleId: rule.id, matchedItemId: item.id },
+      if (!existingRecord) {
+        await this.prisma.matchRecord.create({
+          data: {
+            ruleId: candidate.id,
+            matchedItemId: item.id,
+            matchScore: candidate.matchScore,
+            isNotified: true,
+          },
         });
+        matchedCount++;
 
-        if (!existingRecord) {
-          await this.prisma.matchRecord.create({
-            data: {
-              ruleId: rule.id,
-              matchedItemId: item.id,
-              matchScore,
-              isNotified: true,
-            },
+        try {
+          await this.notificationClient.send({
+            userId: candidate.userId,
+            title: 'Auto-Match Alert',
+            message: `A new item matching "${candidate.keyword}" was listed: "${item.title}"`,
           });
-          matchedCount++;
-
-          try {
-            await this.notificationClient.send({
-              userId: rule.userId,
-              title: 'Auto-Match Alert',
-              message: `A new item matching "${rule.keyword}" was listed: "${item.title}"`,
-            });
-          } catch (err) {
-            this.logger.error(
-              `Failed to send auto-match notification to user ${rule.userId}`,
-              err,
-            );
-          }
+        } catch (err) {
+          this.logger.error(
+            `Failed to send auto-match notification to user ${candidate.userId}`,
+            err,
+          );
         }
       }
     }

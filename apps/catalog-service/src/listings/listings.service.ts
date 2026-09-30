@@ -4,9 +4,27 @@ import {
   Injectable,
   NotFoundException,
 } from "@nestjs/common";
-import { PrismaClient } from "../generated/prisma-client/client";
+import { Prisma, PrismaClient } from "../generated/prisma-client/client";
 import { PrismaPg } from "@prisma/adapter-pg";
 import { WishlistClient } from "../clients/wishlist.client";
+
+// Loose enough that typos/partial words still surface results, in line with
+// pg_trgm's own default similarity_threshold (0.3).
+const SEARCH_MIN_SCORE = 0.3;
+
+export interface ItemSearchRow {
+  id: string;
+  sellerId: string;
+  categoryId: string;
+  title: string;
+  description: string | null;
+  price: Prisma.Decimal;
+  status: string;
+  imageUrls: string[];
+  createdAt: Date;
+  updatedAt: Date;
+  matchScore: number;
+}
 
 @Injectable()
 export class ListingsService {
@@ -19,12 +37,35 @@ export class ListingsService {
   findAll(query: any) {
     // Public search only ever shows Available items — Sold/Reserved items
     // shouldn't appear to buyers browsing the marketplace.
+    if (query?.search) {
+      const categoryFilter = query?.category_id
+        ? Prisma.sql`AND "category_id" = ${query.category_id}::uuid`
+        : Prisma.empty;
+
+      return this.prisma.$queryRaw<ItemSearchRow[]>(Prisma.sql`
+        SELECT
+          "item_id" AS "id",
+          "seller_id" AS "sellerId",
+          "category_id" AS "categoryId",
+          "title",
+          "description",
+          "price",
+          "status",
+          "image_urls" AS "imageUrls",
+          "created_at" AS "createdAt",
+          "updated_at" AS "updatedAt",
+          word_similarity(${query.search}, "title") AS "matchScore"
+        FROM "Item"
+        WHERE "status" = 'Available'::"ItemStatus"
+          ${categoryFilter}
+          AND word_similarity(${query.search}, "title") >= ${SEARCH_MIN_SCORE}
+        ORDER BY "matchScore" DESC
+      `);
+    }
+
     const where: any = { status: "Available" };
     if (query?.category_id) {
       where.categoryId = query.category_id;
-    }
-    if (query?.search) {
-      where.title = { contains: query.search, mode: "insensitive" };
     }
     return this.prisma.item.findMany({ where });
   }
