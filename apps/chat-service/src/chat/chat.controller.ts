@@ -3,10 +3,14 @@ import { ApiOperation } from '@nestjs/swagger';
 import { UserClaims } from '@workspace/contracts';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { ChatService } from './chat.service';
+import { ChatGateway } from './chat.gateway';
 
 @Controller()
 export class ChatController {
-  constructor(private readonly chatService: ChatService) {}
+  constructor(
+    private readonly chatService: ChatService,
+    private readonly chatGateway: ChatGateway,
+  ) {}
 
   @ApiOperation({ summary: 'getChatRooms()' })
   @Get('rooms')
@@ -28,12 +32,13 @@ export class ChatController {
 
   @ApiOperation({ summary: 'sendMessage()' })
   @Post('rooms/:roomId/messages')
-  sendMessage(
+  async sendMessage(
     @Param('roomId') roomId: string,
     @Body('content') content: string,
     @CurrentUser() user: UserClaims,
   ) {
-    return this.chatService.createMessage(roomId, user.userId, content);
+    const result = await this.chatService.createMessage(roomId, user.userId, content);
+    this.chatGateway.pushNewMessage(result.message, result.recipientId, user.userId);
+    return result.message;
   }
-
 }

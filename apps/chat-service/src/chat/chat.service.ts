@@ -147,6 +147,6 @@ export class ChatService {
       this.logger.error(`Failed to send notification for chat message in room ${roomId}`, err);
     }
 
-    return message;
+    return { recipientId, message };
   }
 }

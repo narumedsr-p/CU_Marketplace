@@ -7,6 +7,7 @@ import Toast from './components/Toast';
 import RateSellerDialog from './components/RateSellerDialog';
 import useToast from './hooks/useToast';
 import useCatalogFilters from './hooks/useCatalogFilters';
+import useLiveChat from './hooks/useLiveChat';
 import { consumeAuthRedirect, signIn, signOut } from './api/auth';
 import { ApiError, getCurrentClaims, getCurrentUserId, getToken, onUnauthorized } from './api/client';
 import {
@@ -148,7 +149,7 @@ export default function App() {
   }>({ role: 'buyer', saleId: null, code: null, codeLoading: false, stage: { buyer: 'ready', seller: 'ready' }, error: null });
 
   const [threads, setThreads] = useState<ChatThread[]>(THREADS);
-  const [activeThread, setActiveThread] = useState<number | null>(1);
+  const [activeThread, setActiveThread] = useState<number | string | null>(1);
   const [notifications, setNotifications] = useState<NotificationItem[]>(NOTIFICATIONS);
   const [blocked, setBlocked] = useState<BlockedUser[]>(BLOCKED_USERS);
   const [cases, setCases] = useState<ModerationCase[]>(MODERATION_CASES);
@@ -157,6 +158,10 @@ export default function App() {
   const [profile, setProfile] = useState<AccountProfile>({ contact: '' });
 
   const { toast, flash } = useToast();
+  // Signed in: real rooms from chat-service, live over Socket.IO. Signed out: the demo threads above.
+  const liveChat = useLiveChat(loggedIn, categories);
+  const chatThreads = loggedIn ? liveChat.threads : threads;
+  const setChatThreads = loggedIn ? liveChat.setThreads : setThreads;
   const { filters, setFilters, results, counts, reset } = useCatalogFilters(listings, query);
 
   useEffect(() => {
@@ -405,6 +410,12 @@ export default function App() {
   };
 
   const openChat = (l: Listing) => {
+    if (loggedIn) {
+      liveChat.openChatFor(l)
+        .then(() => navigate('/chat'))
+        .catch((err) => flash('Could not open chat: ' + (err instanceof Error ? err.message : 'unknown error')));
+      return;
+    }
     const existing = threads.find((t) => t.name === l.seller && t.listing.id === l.id) || threads.find((t) => t.name === l.seller);
     if (existing) {
       setThreads((ts) => ts.map((t) => (t.id === existing.id ? { ...t, unread: 0 } : t)));
@@ -421,9 +432,13 @@ export default function App() {
     navigate('/chat');
   };
 
-  const sendMessage = (threadId: number, text: string) => {
-    const t = threads.find((x) => x.id === threadId);
+  const sendMessage = (threadId: number | string, text: string) => {
+    const t = chatThreads.find((x) => x.id === threadId);
     if (!t || t.blocked) { flash('Message not sent — this conversation is blocked.'); return; }
+    if (loggedIn && typeof threadId === 'string') {
+      liveChat.send(threadId, text).then((ack) => { if (!ack.ok) flash('Message not sent: ' + ack.error); });
+      return;
+    }
     setThreads((ts) => ts.map((x) => (x.id === threadId
       ? { ...x, messages: [...x.messages, { id: 'me' + Date.now(), from: 'me' as const, text, time: 'now', status: 'Sent' }] }
       : x)));
@@ -431,7 +446,7 @@ export default function App() {
 
   const toggleBlock = (t: ChatThread) => {
     const nowBlocked = !t.blocked;
-    setThreads((ts) => ts.map((x) => (x.id === t.id ? { ...x, blocked: nowBlocked } : x)));
+    setChatThreads((ts) => ts.map((x) => (x.id === t.id ? { ...x, blocked: nowBlocked } : x)));
     setBlocked((b) => (nowBlocked ? [...b, { name: t.name, since: 'today' }] : b.filter((x) => x.name !== t.name)));
     flash(nowBlocked ? t.name + ' blocked.' : t.name + ' unblocked.');
   };
@@ -728,9 +743,12 @@ export default function App() {
 
           <Route path="/chat" element={(
             <ChatScreen
-              threads={threads} activeId={activeThread} typingId={null}
-              onSelectThread={(id) => { setActiveThread(id); setThreads((ts) => ts.map((t) => (t.id === id ? { ...t, unread: 0 } : t))); }}
-              onBack={() => setActiveThread(null)}
+              threads={chatThreads} activeId={loggedIn ? liveChat.activeId : activeThread} typingId={null}
+              onSelectThread={(id) => {
+                if (loggedIn) { liveChat.select(String(id)); return; }
+                setActiveThread(id); setThreads((ts) => ts.map((t) => (t.id === id ? { ...t, unread: 0 } : t)));
+              }}
+              onBack={() => (loggedIn ? liveChat.setActiveId(null) : setActiveThread(null))}
               onSend={(id, text) => sendMessage(id, text)}
               onAttachPhoto={() => flash('Photo picker — up to 4 images.')}
               onToggleBlock={toggleBlock}
