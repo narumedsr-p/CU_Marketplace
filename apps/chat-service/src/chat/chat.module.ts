@@ -4,6 +4,7 @@ import { ChatController } from './chat.controller';
 import { ChatService } from './chat.service';
 import { NotificationClient } from '../clients/notification.client';
 import { getRabbitMqUrl, QUEUES } from '@workspace/contracts';
+import { ChatGateway } from './chat.gateway';
 
 @Module({
   imports: [
@@ -20,6 +21,6 @@ import { getRabbitMqUrl, QUEUES } from '@workspace/contracts';
     ]),
   ],
   controllers: [ChatController],
-  providers: [ChatService, NotificationClient],
+  providers: [ChatService, NotificationClient, ChatGateway],
 })
 export class ChatModule {}
