@@ -17,6 +17,7 @@
     "@nestjs/common": "^10.4.4",
     "@nestjs/core": "^10.4.4",
     "@nestjs/microservices": "^10.4.4",
+    "@nestjs/mongoose": "^10.1.0",
     "@nestjs/platform-express": "^10.4.4",
     "@nestjs/swagger": "7.4.2",
     "@prisma/adapter-pg": "7.10.0",
@@ -28,6 +29,7 @@
     "axios": "^1.7.7",
     "dotenv": "^16.4.5",
     "dotenv-expand": "^1000.0.0",
+    "mongoose": "^8.24.5",
     "reflect-metadata": "^0.2.2",
     "rxjs": "^7.8.1"
   },
