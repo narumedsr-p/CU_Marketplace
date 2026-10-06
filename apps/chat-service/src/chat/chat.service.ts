@@ -5,36 +5,31 @@ import {
   Logger,
   NotFoundException,
 } from '@nestjs/common';
-import { PrismaClient } from '../generated/prisma-client/client';
-import { PrismaPg } from '@prisma/adapter-pg';
+import { InjectModel } from '@nestjs/mongoose';
+import { randomUUID } from 'crypto';
+import { Model } from 'mongoose';
 import { NotificationClient } from '../clients/notification.client';
+import { ChatRoom, toParticipantKey } from './schemas/chat-room.schema';
+import { ChatMessage } from './schemas/chat-message.schema';
 
 @Injectable()
 export class ChatService {
-  private readonly prisma = new PrismaClient({
-    adapter: new PrismaPg({ connectionString: process.env.DATABASE_URL! }),
-  });
   private readonly logger = new Logger(ChatService.name);
 
-  constructor(private readonly notificationClient: NotificationClient) {}
+  constructor(
+    @InjectModel(ChatRoom.name) private readonly roomModel: Model<ChatRoom>,
+    @InjectModel(ChatMessage.name) private readonly messageModel: Model<ChatMessage>,
+    private readonly notificationClient: NotificationClient,
+  ) {}
 
   async findRooms(userId: string) {
     if (!userId) {
       throw new BadRequestException('User ID is required');
     }
 
-    return this.prisma.chatRoom.findMany({
-      where: {
-        OR: [{ participant1: userId }, { participant2: userId }],
-      },
-      include: {
-        messages: {
-          orderBy: { createdAt: 'desc' },
-          take: 1,
-        },
-      },
-      orderBy: { updatedAt: 'desc' },
-    });
+    return this.roomModel
+      .find({ $or: [{ participant1: userId }, { participant2: userId }] })
+      .sort({ updatedAt: -1 });
   }
 
   async createRoom(data: any, callerId?: string, callerRole?: string) {
@@ -56,33 +51,25 @@ export class ChatService {
       }
     }
 
-    const existingRoom = await this.prisma.chatRoom.findFirst({
-      where: {
-        itemId,
-        OR: [
-          { participant1, participant2 },
-          { participant1: participant2, participant2: participant1 },
-        ],
-      },
-    });
+    const now = new Date();
 
-    if (existingRoom) {
-      return existingRoom;
-    }
-
-    return this.prisma.chatRoom.create({
-      data: {
-        participant1,
-        participant2,
-        itemId,
+    return this.roomModel.findOneAndUpdate(
+      { itemId, participantKey: toParticipantKey(participant1, participant2) },
+      {
+        $setOnInsert: {
+          _id: randomUUID(),
+          participant1,
+          participant2,
+          createdAt: now,
+          updatedAt: now,
+        },
       },
-    });
+      { upsert: true, new: true, setDefaultsOnInsert: true, timestamps: false },
+    );
   }
 
   async findMessages(roomId: string, callerId?: string, callerRole?: string) {
-    const room = await this.prisma.chatRoom.findUnique({
-      where: { id: roomId },
-    });
+    const room = await this.roomModel.findById(roomId);
 
     if (!room) {
       throw new NotFoundException('Chat room not found');
@@ -94,10 +81,7 @@ export class ChatService {
       }
     }
 
-    return this.prisma.chatMessage.findMany({
-      where: { roomId },
-      orderBy: { createdAt: 'asc' },
-    });
+    return this.messageModel.find({ roomId }).sort({ createdAt: 1 });
   }
 
   async createMessage(roomId: string, senderId: string, content: string) {
@@ -105,9 +89,7 @@ export class ChatService {
       throw new BadRequestException('Message content cannot be empty');
     }
 
-    const room = await this.prisma.chatRoom.findUnique({
-      where: { id: roomId },
-    });
+    const room = await this.roomModel.findById(roomId);
 
     if (!room) {
       throw new NotFoundException('Chat room not found');
@@ -121,19 +103,30 @@ export class ChatService {
       throw new ForbiddenException('You are not a participant in this chat room');
     }
 
-    const message = await this.prisma.chatMessage.create({
-      data: {
-        roomId,
-        senderId,
-        content,
-        isSystemMsg: false,
-      },
+    const message = await this.messageModel.create({
+      roomId,
+      senderId,
+      content,
+      isSystemMsg: false,
     });
 
-    await this.prisma.chatRoom.update({
-      where: { id: roomId },
-      data: { updatedAt: new Date() },
-    });
+    await this.roomModel.updateOne(
+      {
+        _id: roomId,
+        $or: [{ lastMessage: null }, { 'lastMessage.createdAt': { $lte: message.createdAt } }],
+      },
+      {
+        $set: {
+          lastMessage: {
+            messageId: message._id,
+            senderId: message.senderId,
+            content: message.content,
+            isSystemMsg: message.isSystemMsg,
+            createdAt: message.createdAt,
+          },
+        },
+      },
+    );
 
     const recipientId = room.participant1 === senderId ? room.participant2 : room.participant1;
 
