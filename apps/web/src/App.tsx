@@ -24,6 +24,10 @@ import {
   fetchMatchRules, fetchMatchRecords, createMatchRule, updateMatchRule, deleteMatchRule,
   type ApiWishlist, type ApiMatchRule,
 } from './api/wishlist';
+import {
+  fetchNotificationPreferences, fetchNotifications,
+  markAllNotificationsRead as apiMarkAllNotificationsRead, updateNotificationPreferences,
+} from './api/notifications';
 
 
 import LoginScreen from './screens/LoginScreen';
@@ -50,14 +54,14 @@ import SellerProfileRoute from './routes/profile/SellerProfileRoute';
 
 import {
   CONDITIONS, FACULTIES, SPOTS,
-  REVIEWS, NOTIFICATION_PREFS,
-  SESSIONS, BLOCKED_USERS, NOTIFICATIONS,
+  REVIEWS,
+  SESSIONS, BLOCKED_USERS,
   THREADS, RESERVATIONS, MODERATION_CASES, AUDIT_LOG, MY_REPORTS,
 } from './data/mockListings';
 import type {
   AccountProfile, AutoMatchAlert, BlockedUser, ChatThread, ChatThreadListing, CurrentUser,
   HandoverOrder, HandoverStage, Listing, ModerationCase, NotificationItem,
-  NotificationPrefsState, Order, Purchase, ReportTarget, Sale, SellForm, SellerReservation, Suspension, AutoMatchHit,
+  NotificationPrefDef, NotificationPrefsState, Order, Purchase, ReportTarget, Sale, SellForm, SellerReservation, Suspension, AutoMatchHit,
 } from './types';
 
 const EMPTY_FORM: SellForm = {
@@ -70,6 +74,11 @@ const DEMO_SUSPENSION: Suspension = {
 };
 
 const ANY_CATEGORY_ID = '00000000-0000-0000-0000-000000000000';
+
+const NOTIFICATION_PREFS: NotificationPrefDef[] = [
+  { key: 'inAppEnabled', name: 'In-app alerts', desc: 'Show notifications while you are using RachaSA.' },
+  { key: 'emailEnabled', name: 'Email alerts', desc: 'Send notification updates to your Chula email.' },
+];
 
 interface ListingRouteProps {
   listings: Listing[];
@@ -147,7 +156,7 @@ export default function App() {
   const [wishlistLoading, setWishlistLoading] = useState(false);
   const [wishlistError, setWishlistError] = useState<string | null>(null);
   const [me, setMe] = useState<ApiProfile | null>(null);
-  const [prefs, setPrefs] = useState<NotificationPrefsState>({ chat: true, wishlist: true, order: true, promo: false });
+  const [prefs, setPrefs] = useState<NotificationPrefsState>({ inAppEnabled: true, emailEnabled: true });
   const [form, setForm] = useState<SellForm>(EMPTY_FORM);
   const [rateOpen, setRateOpen] = useState(false);
 
@@ -159,7 +168,13 @@ export default function App() {
 
   const [threads, setThreads] = useState<ChatThread[]>(THREADS);
   const [activeThread, setActiveThread] = useState<number | string | null>(1);
-  const [notifications, setNotifications] = useState<NotificationItem[]>(NOTIFICATIONS);
+  const [notifications, setNotifications] = useState<NotificationItem[]>([]);
+  const [notificationsLoading, setNotificationsLoading] = useState(false);
+  const [notificationsError, setNotificationsError] = useState<string | null>(null);
+  const [preferencesLoading, setPreferencesLoading] = useState(false);
+  const [preferencesError, setPreferencesError] = useState<string | null>(null);
+  const [markingAllRead, setMarkingAllRead] = useState(false);
+  const [savingPreferences, setSavingPreferences] = useState(false);
   const [blocked, setBlocked] = useState<BlockedUser[]>(BLOCKED_USERS);
   const [cases, setCases] = useState<ModerationCase[]>(MODERATION_CASES);
   const [reservations, setReservations] = useState<Record<string, SellerReservation>>(RESERVATIONS);
@@ -248,6 +263,32 @@ export default function App() {
     }
   };
 
+  const loadNotificationsData = async () => {
+    setNotificationsLoading(true);
+    setNotificationsError(null);
+    try {
+      setNotifications(await fetchNotifications());
+    } catch (err) {
+      setNotificationsError('Could not load notifications: ' + (err instanceof Error ? err.message : 'unknown error'));
+      throw err;
+    } finally {
+      setNotificationsLoading(false);
+    }
+  };
+
+  const loadNotificationPreferences = async () => {
+    setPreferencesLoading(true);
+    setPreferencesError(null);
+    try {
+      setPrefs(await fetchNotificationPreferences());
+    } catch (err) {
+      setPreferencesError('Could not load notification preferences: ' + (err instanceof Error ? err.message : 'unknown error'));
+      throw err;
+    } finally {
+      setPreferencesLoading(false);
+    }
+  };
+
   useEffect(() => {
     onUnauthorized(() => {
       setLoggedIn(false);
@@ -301,6 +342,8 @@ export default function App() {
       }
       try { await loadWishlistData(); } catch { /* Error stays visible on the Wishlist screen. */ }
       try { await loadMatchData(cats); } catch { /* Error stays visible on the Wishlist screen. */ }
+      try { await loadNotificationsData(); } catch { /* Error stays visible on the Notifications screen. */ }
+      try { await loadNotificationPreferences(); } catch { /* Error stays visible on the Notifications screen. */ }
     })();
     return () => { cancelled = true; };
   }, [loggedIn, flash]);
@@ -347,6 +390,36 @@ export default function App() {
     const id = typeof l === 'object' ? l.id : l;
     setSelectedId(id);
     navigate('/listing/' + id);
+  };
+
+  const markAllNotificationsRead = async () => {
+    if (markingAllRead || !notifications.some((notification) => !notification.read)) return;
+    setMarkingAllRead(true);
+    try {
+      await apiMarkAllNotificationsRead();
+      setNotifications((items) => items.map((item) => ({ ...item, read: true })));
+      flash('All notifications marked as read.');
+    } catch (err) {
+      flash('Could not mark notifications as read: ' + (err instanceof Error ? err.message : 'unknown error'));
+      throw err;
+    } finally {
+      setMarkingAllRead(false);
+    }
+  };
+
+  const toggleNotificationPreference = async (key: string) => {
+    if (savingPreferences || !(key in prefs)) return;
+    setSavingPreferences(true);
+    try {
+      const updated = await updateNotificationPreferences({ [key]: !prefs[key] });
+      setPrefs(updated);
+      flash('Notification preference saved.');
+    } catch (err) {
+      flash('Could not save notification preference: ' + (err instanceof Error ? err.message : 'unknown error'));
+      throw err;
+    } finally {
+      setSavingPreferences(false);
+    }
   };
 
   const placeOrder = async (listing: Listing) => {
@@ -590,7 +663,8 @@ export default function App() {
 
   const unread = notifications.filter((n) => !n.read).length;
   const openNotification = (n: NotificationItem) => {
-    setNotifications((ns) => ns.map((x) => (x.id === n.id ? { ...x, read: true } : x)));
+    // The current API only persists a bulk read operation; keep item state in sync
+    // with the server instead of making a local-only per-item read change.
     const a = n.action;
     if (!a) return;
     if (a.type === 'listing' && a.listingId) openListing(a.listingId);
@@ -676,7 +750,7 @@ export default function App() {
       reviews={REVIEWS}
       prefs={prefs}
       notificationPrefs={NOTIFICATION_PREFS}
-      onTogglePref={(k) => setPrefs((p) => ({ ...p, [k]: !p[k] }))}
+      onTogglePref={(key) => { void toggleNotificationPreference(key); }}
       onEditProfile={() => navigate('/account')}
       onWishlist={() => navigate('/wishlist')}
       onSell={() => navigate('/sell')}
@@ -801,7 +875,7 @@ export default function App() {
               reviews={REVIEWS}
               prefs={prefs}
               notificationPrefs={NOTIFICATION_PREFS}
-              onTogglePref={(k) => setPrefs((p) => ({ ...p, [k]: !p[k] }))}
+              onTogglePref={(key) => { void toggleNotificationPreference(key); }}
               onEditProfile={() => navigate('/account')}
               onWishlist={() => navigate('/wishlist')}
               onSell={() => navigate('/sell')}
@@ -929,9 +1003,16 @@ export default function App() {
           <Route path="/notifications" element={(
             <NotificationsScreen
               notifications={notifications} prefs={prefs} prefItems={NOTIFICATION_PREFS}
+              loading={notificationsLoading || preferencesLoading}
+              error={notificationsError ?? preferencesError}
+              markingAllRead={markingAllRead}
+              savingPreferences={savingPreferences}
               onOpen={openNotification}
-              onMarkAllRead={() => setNotifications((ns) => ns.map((n) => ({ ...n, read: true })))}
-              onTogglePref={(k) => setPrefs((p) => ({ ...p, [k]: !p[k] }))}
+              onRetry={async () => {
+                await Promise.all([loadNotificationsData(), loadNotificationPreferences()]);
+              }}
+              onMarkAllRead={markAllNotificationsRead}
+              onTogglePref={toggleNotificationPreference}
             />
           )} />
 

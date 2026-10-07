@@ -1,6 +1,6 @@
 import type {
   AccountProfile, AccountUser, AuditEntry, AutoMatchAlert, BlockedUser, ChatThread,
-  CurrentUser, Listing, ModerationCase, MyReportSummary, NotificationItem, NotificationPrefDef,
+  CurrentUser, Listing, ModerationCase, MyReportSummary,
   Purchase, Review, SellerReservation, Session,
 } from '../types';
 
@@ -43,13 +43,6 @@ export const REVIEWS: Review[] = [
   { id: 'r3', name: 'Beam S.', item: 'Calculus bundle', when: 'last month', stars: 4, text: 'Good price for the bundle. Had to reschedule once but they were flexible.' },
 ];
 
-export const NOTIFICATION_PREFS: NotificationPrefDef[] = [
-  { key: 'chat', name: 'Chat messages', desc: 'New message from a buyer or seller' },
-  { key: 'wishlist', name: 'Wishlist & auto-match', desc: 'A saved keyword matched a new listing' },
-  { key: 'order', name: 'Order status', desc: 'Reserved, cancelled, expired, completed' },
-  { key: 'promo', name: 'Campus announcements', desc: 'Faculty sale events and category drops' },
-];
-
 export const ACCOUNT_USER: AccountUser = {
   name: CURRENT_USER.name, memberType: CURRENT_USER.memberType,
   faculty: CURRENT_USER.faculty, email: '6731332321@student.chula.ac.th',
@@ -66,13 +59,6 @@ export const SESSIONS: Session[] = [
 
 export const BLOCKED_USERS: BlockedUser[] = [
   { name: 'Win Prasert', since: '26 Sep 2026' },
-];
-
-export const NOTIFICATIONS: NotificationItem[] = [
-  { id: 1, kind: 'match', category: 'Auto-match', group: 'today', read: false, time: '4 min', title: 'Auto-match: “fx-991”', body: 'Casio fx-991EX scientific calculator · ฿550 — posted by Kannawich M. at Sala Phra Kiao.', cta: 'View listing', channel: 'Push · delivered', action: { type: 'listing', listingId: '10000000-0000-0000-0000-000000000008' } },
-  { id: 2, kind: 'chat', category: 'Chat', group: 'today', read: false, time: '18 min', title: 'Ploy W. replied', body: '“Yes, two spare nibs. Can meet at 5 at the Fine Arts courtyard?”', cta: 'Open chat', channel: 'In-app', action: { type: 'chat', id: 2 } },
-  { id: 3, kind: 'order', category: 'Orders', group: 'today', read: false, time: '1 h', title: 'Pickup window closes at 19:00', body: 'Mint R.’s reservation on your standing fan expires today.', cta: 'View my listings', channel: 'Push', action: { type: 'mylistings' } },
-  { id: 4, kind: 'account', category: 'Account', group: 'earlier', read: true, time: 'Mon', title: 'Your report was resolved', body: 'Case CASE-1031 “Replica jersey”: the listing was removed by a moderator.', cta: 'See my reports', channel: 'In-app', action: { type: 'account' } },
 ];
 
 export const THREADS: ChatThread[] = [

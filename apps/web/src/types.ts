@@ -295,7 +295,7 @@ export interface NotificationAction {
 }
 
 export interface NotificationItem {
-  id: number;
+  id: string | number;
   kind: NotificationKind;
   category: string;
   title: string;
