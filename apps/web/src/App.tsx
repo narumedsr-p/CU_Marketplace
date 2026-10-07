@@ -21,7 +21,7 @@ import {
 } from './api/orders';
 import {
   fetchWishlists, addToWishlist, removeFromWishlist,
-  fetchMatchRules, createMatchRule, updateMatchRule, deleteMatchRule,
+  fetchMatchRules, fetchMatchRecords, createMatchRule, updateMatchRule, deleteMatchRule,
   type ApiWishlist, type ApiMatchRule,
 } from './api/wishlist';
 
@@ -52,12 +52,12 @@ import {
   CONDITIONS, FACULTIES, SPOTS,
   REVIEWS, NOTIFICATION_PREFS,
   SESSIONS, BLOCKED_USERS, NOTIFICATIONS,
-  THREADS, RESERVATIONS, AUTO_MATCH_ALERTS, MODERATION_CASES, AUDIT_LOG, MY_REPORTS,
+  THREADS, RESERVATIONS, MODERATION_CASES, AUDIT_LOG, MY_REPORTS,
 } from './data/mockListings';
 import type {
   AccountProfile, AutoMatchAlert, BlockedUser, ChatThread, ChatThreadListing, CurrentUser,
   HandoverOrder, HandoverStage, Listing, ModerationCase, NotificationItem,
-  NotificationPrefsState, Order, Purchase, ReportTarget, Sale, SellForm, SellerReservation, Suspension,
+  NotificationPrefsState, Order, Purchase, ReportTarget, Sale, SellForm, SellerReservation, Suspension, AutoMatchHit,
 } from './types';
 
 const EMPTY_FORM: SellForm = {
@@ -68,6 +68,8 @@ const DEMO_SUSPENSION: Suspension = {
   until: '4 Oct 2026', reason: 'Selling counterfeit goods — CU jersey listed as "official".',
   caseId: 'CASE-1042', since: '27 Sep 2026', duration: '7 days',
 };
+
+const ANY_CATEGORY_ID = '00000000-0000-0000-0000-000000000000';
 
 interface ListingRouteProps {
   listings: Listing[];
@@ -142,6 +144,8 @@ export default function App() {
   const [wishIds, setWishIds] = useState<string[]>([]);
   // Map itemId -> wishlistId (the backend row id) for efficient removal
   const [wishlistMap, setWishlistMap] = useState<Record<string, string>>({});
+  const [wishlistLoading, setWishlistLoading] = useState(false);
+  const [wishlistError, setWishlistError] = useState<string | null>(null);
   const [me, setMe] = useState<ApiProfile | null>(null);
   const [prefs, setPrefs] = useState<NotificationPrefsState>({ chat: true, wishlist: true, order: true, promo: false });
   const [form, setForm] = useState<SellForm>(EMPTY_FORM);
@@ -160,6 +164,9 @@ export default function App() {
   const [cases, setCases] = useState<ModerationCase[]>(MODERATION_CASES);
   const [reservations, setReservations] = useState<Record<string, SellerReservation>>(RESERVATIONS);
   const [alerts, setAlerts] = useState<AutoMatchAlert[]>([]);
+  const [matchHits, setMatchHits] = useState<AutoMatchHit[]>([]);
+  const [matchLoading, setMatchLoading] = useState(false);
+  const [matchError, setMatchError] = useState<string | null>(null);
   const [profile, setProfile] = useState<AccountProfile>({ contact: '' });
 
   const { toast, flash } = useToast();
@@ -168,6 +175,78 @@ export default function App() {
   const chatThreads = loggedIn ? liveChat.threads : threads;
   const setChatThreads = loggedIn ? liveChat.setThreads : setThreads;
   const { filters, setFilters, results, counts, reset } = useCatalogFilters(listings, query);
+
+  const categoryNameFor = (categoryId: string, availableCategories: ApiCategory[]) => (
+    categoryId === ANY_CATEGORY_ID
+      ? 'Any'
+      : availableCategories.find((category) => category.id === categoryId)?.name ?? 'Any'
+  );
+
+  const loadWishlistData = async () => {
+    setWishlistLoading(true);
+    setWishlistError(null);
+    try {
+      const wishlists = await fetchWishlists();
+      const map: Record<string, string> = {};
+      wishlists.forEach((wishlist: ApiWishlist) => { map[wishlist.itemId] = wishlist.id; });
+      setWishlistMap(map);
+      setWishIds(wishlists.map((wishlist: ApiWishlist) => wishlist.itemId));
+    } catch (err) {
+      setWishlistError('Could not load your saved listings: ' + (err instanceof Error ? err.message : 'unknown error'));
+      throw err;
+    } finally {
+      setWishlistLoading(false);
+    }
+  };
+
+  const loadMatchData = async (availableCategories: ApiCategory[]) => {
+    setMatchLoading(true);
+    setMatchError(null);
+    try {
+      const rules = await fetchMatchRules();
+      const activeRules = rules.filter((rule) => rule.isActive);
+      const recordsByRule = await Promise.all(activeRules.map(async (rule) => [
+        rule,
+        await fetchMatchRecords(rule.id),
+      ] as const));
+      const recordCountByRule = new Map(recordsByRule.map(([rule, matches]) => [rule.id, matches.length]));
+      const records = recordsByRule.flatMap(([rule, matches]) => matches.map((match) => ({ rule, match })));
+      const listingIds = [...new Set(records.map(({ match }) => match.matchedItemId))];
+      const resolvedListings = await Promise.all(listingIds.map(async (itemId) => [
+        itemId,
+        await fetchListing(itemId, availableCategories).catch(() => null),
+      ] as const));
+      const listingsById = new Map(resolvedListings);
+
+      setAlerts(rules.map((rule: ApiMatchRule) => ({
+        id: rule.id,
+        text: rule.keyword,
+        categoryId: rule.categoryId,
+        cat: categoryNameFor(rule.categoryId, availableCategories),
+        on: rule.isActive,
+        liveMatches: recordCountByRule.get(rule.id) ?? rule.matches?.length ?? 0,
+      })));
+      setMatchHits(records
+        .map(({ rule, match }) => {
+          const listing = listingsById.get(match.matchedItemId);
+          return listing ? {
+            id: match.id,
+            ruleId: rule.id,
+            listing,
+            keyword: rule.keyword,
+            score: Number(match.matchScore),
+            matchedAt: match.matchedAt,
+          } : null;
+        })
+        .filter((match): match is AutoMatchHit => match !== null)
+        .sort((a, b) => b.matchedAt.localeCompare(a.matchedAt)));
+    } catch (err) {
+      setMatchError('Could not load your auto-match alerts: ' + (err instanceof Error ? err.message : 'unknown error'));
+      throw err;
+    } finally {
+      setMatchLoading(false);
+    }
+  };
 
   useEffect(() => {
     onUnauthorized(() => {
@@ -220,31 +299,8 @@ export default function App() {
       } catch (err) {
         if (!cancelled) flash('Could not load sales: ' + (err instanceof Error ? err.message : 'unknown error'));
       }
-      try {
-        const wishlists = await fetchWishlists();
-        if (!cancelled) {
-          const map: Record<string, string> = {};
-          wishlists.forEach((w: ApiWishlist) => { map[w.itemId] = w.id; });
-          setWishlistMap(map);
-          setWishIds(wishlists.map((w: ApiWishlist) => w.itemId));
-        }
-      } catch {
-        // wishlist failing is non-critical — silently ignore
-      }
-      try {
-        const rules = await fetchMatchRules();
-        if (!cancelled) {
-          setAlerts(rules.map((r: ApiMatchRule) => ({
-            id: r.id,
-            text: r.keyword,
-            cat: r.categoryId,
-            on: r.isActive,
-            liveMatches: r.matches?.length ?? 0,
-          })));
-        }
-      } catch {
-        // match rules failing is non-critical — silently ignore
-      }
+      try { await loadWishlistData(); } catch { /* Error stays visible on the Wishlist screen. */ }
+      try { await loadMatchData(cats); } catch { /* Error stays visible on the Wishlist screen. */ }
     })();
     return () => { cancelled = true; };
   }, [loggedIn, flash]);
@@ -774,14 +830,16 @@ export default function App() {
           <Route path="/wishlist" element={(
             <WishlistScreen
               saved={savedAll.filter((l) => l.status !== 'Sold')}
-              autoRemoved={savedAll.filter((l) => l.status === 'Sold')}
-              alerts={alerts} matches={[]} categories={categoryNames}
-              notifyOn={prefs.wishlist}
-              onEnableNotify={() => setPrefs((p) => ({ ...p, wishlist: true }))}
+              alerts={alerts} matches={matchHits} categories={categoryNames}
+              loading={wishlistLoading || matchLoading}
+              error={wishlistError ?? matchError}
+              onRetry={async () => {
+                await Promise.all([loadWishlistData(), loadMatchData(categories)]);
+              }}
               onOpenListing={openListing}
               onRemove={async (itemId) => {
                 const wishlistId = wishlistMap[itemId];
-                if (!wishlistId) return;
+                if (!wishlistId) throw new Error('Saved listing was not found. Refresh and try again.');
                 try {
                   await removeFromWishlist(wishlistId);
                   setWishIds((w) => w.filter((x) => x !== itemId));
@@ -789,46 +847,55 @@ export default function App() {
                   flash('Removed from wishlist.');
                 } catch (err) {
                   flash('Could not remove: ' + (err instanceof Error ? err.message : 'unknown error'));
+                  throw err;
                 }
               }}
               onBrowse={() => navigate('/browse')}
               onCreateAlert={async (a) => {
-                const catId = categories.find((c) => c.name === a.cat)?.id;
+                const categoryId = a.cat === 'Any' ? undefined : categories.find((c) => c.name === a.cat)?.id;
+                if (a.cat !== 'Any' && !categoryId) throw new Error('Choose a valid category.');
                 try {
-                  const rule = await createMatchRule({ keyword: a.text, categoryId: catId, isActive: true });
-                  setAlerts((as) => [{ id: rule.id, text: rule.keyword, cat: rule.categoryId, on: rule.isActive, liveMatches: 0 }, ...as]);
+                  await createMatchRule({ keyword: a.text, categoryId, isActive: true });
+                  await loadMatchData(categories);
                   flash('Alert created.');
                 } catch (err) {
                   flash('Could not create alert: ' + (err instanceof Error ? err.message : 'unknown error'));
+                  throw err;
                 }
               }}
               onUpdateAlert={async (id, patch) => {
-                const catId = patch.cat !== 'Any' ? categories.find((c) => c.name === patch.cat)?.id : undefined;
+                const categoryId = patch.cat === 'Any'
+                  ? ANY_CATEGORY_ID
+                  : categories.find((c) => c.name === patch.cat)?.id;
+                if (!categoryId) throw new Error('Choose a valid category.');
                 try {
-                  const rule = await updateMatchRule(String(id), { keyword: patch.text, ...(catId ? { categoryId: catId } : {}) });
-                  setAlerts((as) => as.map((a) => (a.id === id ? { ...a, text: rule.keyword, cat: rule.categoryId } : a)));
+                  await updateMatchRule(String(id), { keyword: patch.text, categoryId });
+                  await loadMatchData(categories);
                   flash('Alert updated.');
                 } catch (err) {
                   flash('Could not update alert: ' + (err instanceof Error ? err.message : 'unknown error'));
+                  throw err;
                 }
               }}
               onDeleteAlert={async (id) => {
                 try {
                   await deleteMatchRule(String(id));
-                  setAlerts((as) => as.filter((a) => a.id !== id));
+                  await loadMatchData(categories);
                   flash('Alert deleted.');
                 } catch (err) {
                   flash('Could not delete alert: ' + (err instanceof Error ? err.message : 'unknown error'));
+                  throw err;
                 }
               }}
               onToggleAlert={async (id) => {
                 const alert = alerts.find((a) => a.id === id);
-                if (!alert) return;
+                if (!alert) throw new Error('Auto-match alert was not found. Refresh and try again.');
                 try {
-                  const rule = await updateMatchRule(String(id), { isActive: !alert.on });
-                  setAlerts((as) => as.map((a) => (a.id === id ? { ...a, on: rule.isActive } : a)));
+                  await updateMatchRule(String(id), { isActive: !alert.on });
+                  await loadMatchData(categories);
                 } catch (err) {
                   flash('Could not toggle alert: ' + (err instanceof Error ? err.message : 'unknown error'));
+                  throw err;
                 }
               }}
             />

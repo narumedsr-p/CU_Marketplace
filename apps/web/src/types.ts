@@ -185,15 +185,19 @@ export interface SuspendPayload {
 export interface AutoMatchAlert {
   id: string | number;
   text: string;
+  categoryId?: string;
   cat?: string;
-  max?: number;
   on: boolean;
   liveMatches?: number;
 }
 
 export interface AutoMatchHit {
+  id: string;
+  ruleId: string;
   listing: Listing;
   keyword: string;
+  score: number;
+  matchedAt: string;
 }
 
 export interface AccountUser {

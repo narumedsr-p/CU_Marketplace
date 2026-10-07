@@ -14,10 +14,8 @@ export class NotificationProxyController {
 
   constructor(private readonly httpService: HttpService) {}
 
-  @All('*')
-  async proxy(@Req() req: Request, @Res() res: Response) {
+  private async forward(req: Request, res: Response) {
     const path = req.originalUrl.slice(this.prefix.length) || '/';
-
     try {
       const response = await firstValueFrom(
         this.httpService.request({
@@ -37,5 +35,15 @@ export class NotificationProxyController {
       const status = error.response?.status ?? 502;
       res.status(status).json(error.response?.data ?? { message: 'Bad Gateway' });
     }
+  }
+
+  @All()
+  proxyRoot(@Req() req: Request, @Res() res: Response) {
+    return this.forward(req, res);
+  }
+
+  @All('*')
+  proxySub(@Req() req: Request, @Res() res: Response) {
+    return this.forward(req, res);
   }
 }

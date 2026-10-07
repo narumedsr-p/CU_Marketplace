@@ -99,7 +99,7 @@ export const RESERVATIONS: Record<string, SellerReservation> = {
 };
 
 export const AUTO_MATCH_ALERTS: AutoMatchAlert[] = [
-  { id: 1, text: 'fx-991', cat: 'Electronics', max: 700, on: true, liveMatches: 1 },
+  { id: 1, text: 'fx-991', cat: 'Electronics', on: true, liveMatches: 1 },
   { id: 2, text: 'lab coat M', cat: 'Any', on: true, liveMatches: 0 },
 ];
 
