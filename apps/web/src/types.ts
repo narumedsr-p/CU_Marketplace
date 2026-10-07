@@ -183,7 +183,7 @@ export interface SuspendPayload {
 }
 
 export interface AutoMatchAlert {
-  id: number;
+  id: string | number;
   text: string;
   cat?: string;
   max?: number;

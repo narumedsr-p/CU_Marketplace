@@ -30,9 +30,9 @@ interface WishlistScreenProps {
   onRemove: (id: string) => void;
   onBrowse: () => void;
   onCreateAlert: (payload: { text: string; cat: string; max: number }) => void;
-  onUpdateAlert: (id: number, payload: { text: string; cat: string; max: number }) => void;
-  onDeleteAlert: (id: number) => void;
-  onToggleAlert: (id: number) => void;
+  onUpdateAlert: (id: string | number, payload: { text: string; cat: string; max: number }) => void;
+  onDeleteAlert: (id: string | number) => void;
+  onToggleAlert: (id: string | number) => void;
 }
 
 // Smart Wishlist & Auto-Matching (FR 4.1–4.7).
@@ -44,7 +44,7 @@ export default function WishlistScreen({
 }: WishlistScreenProps) {
   const [tab, setTab] = useState<WishlistTab>(initialTab);
   const [draft, setDraft] = useState<AlertDraft>({ text: '', cat: 'Any', max: '' });
-  const [editingId, setEditingId] = useState<number | null>(null);
+  const [editingId, setEditingId] = useState<string | number | null>(null);
 
   const reset = () => { setDraft({ text: '', cat: 'Any', max: '' }); setEditingId(null); };
   const submit = () => {

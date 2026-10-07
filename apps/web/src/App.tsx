@@ -19,6 +19,12 @@ import {
   cancelOrder as apiCancelOrder, cancelOrderById, completeHandover, fetchMyOrders, fetchOrderStatus,
   formatHandoverCode, getHandoverQr, getPurchasesItem, normalizeHandoverCode, placeOrder as apiPlaceOrder,
 } from './api/orders';
+import {
+  fetchWishlists, addToWishlist, removeFromWishlist,
+  fetchMatchRules, createMatchRule, updateMatchRule, deleteMatchRule,
+  type ApiWishlist, type ApiMatchRule,
+} from './api/wishlist';
+
 
 import LoginScreen from './screens/LoginScreen';
 import CatalogScreen from './screens/CatalogScreen';
@@ -68,7 +74,8 @@ interface ListingRouteProps {
   loaded: boolean;
   loadListing: (id: string) => Promise<Listing | null>;
   wishIds: string[];
-  setWishIds: (fn: (ids: string[]) => string[]) => void;
+  wishlistMap: Record<string, string>;
+  onToggleWishlist: (listing: Listing) => void;
   setSelectedId: (id: string) => void;
   placeOrder: (listing: Listing) => void;
   openChat: (listing: Listing) => void;
@@ -80,7 +87,7 @@ interface ListingRouteProps {
 // Reads :id from the URL and keeps `selectedId` in sync so a direct link / refresh / back
 // button resolves to the right listing.
 function ListingRoute({
-  listings, loaded, loadListing, wishIds, setWishIds, setSelectedId, placeOrder, openChat, openReport, setBlocked, flash,
+  listings, loaded, loadListing, wishIds, wishlistMap, onToggleWishlist, setSelectedId, placeOrder, openChat, openReport, setBlocked, flash,
 }: ListingRouteProps) {
   const { id = '' } = useParams<{ id: string }>();
   const navigate = useNavigate();
@@ -104,11 +111,7 @@ function ListingRoute({
       wished={wishIds.includes(listing.id)}
       onPlaceOrder={() => placeOrder(listing)}
       onChat={() => openChat(listing)}
-      onToggleWishlist={() => {
-        const on = wishIds.includes(listing.id);
-        setWishIds((w) => (on ? w.filter((x) => x !== listing.id) : [...w, listing.id]));
-        flash(on ? 'Removed from wishlist' : 'Added to wishlist');
-      }}
+      onToggleWishlist={() => onToggleWishlist(listing)}
       onViewSeller={() => { if (listing.sellerId) navigate('/profile/' + listing.sellerId); }}
       onReport={() => openReport({ type: 'Listing', title: listing.title, target: listing.seller })}
       onBlock={() => { setBlocked((b) => [...b, { name: listing.seller, since: 'today' }]); flash(listing.seller + ' blocked.'); }}
@@ -136,7 +139,9 @@ export default function App() {
   const [order, setOrder] = useState<Order | null>(null);
   const [orders, setOrders] = useState<Order[]>([]);
   const [sales, setSales] = useState<Sale[]>([]);
-  const [wishIds, setWishIds] = useState<string[]>(['10000000-0000-0000-0000-000000000003', '10000000-0000-0000-0000-000000000005']);
+  const [wishIds, setWishIds] = useState<string[]>([]);
+  // Map itemId -> wishlistId (the backend row id) for efficient removal
+  const [wishlistMap, setWishlistMap] = useState<Record<string, string>>({});
   const [me, setMe] = useState<ApiProfile | null>(null);
   const [prefs, setPrefs] = useState<NotificationPrefsState>({ chat: true, wishlist: true, order: true, promo: false });
   const [form, setForm] = useState<SellForm>(EMPTY_FORM);
@@ -154,7 +159,7 @@ export default function App() {
   const [blocked, setBlocked] = useState<BlockedUser[]>(BLOCKED_USERS);
   const [cases, setCases] = useState<ModerationCase[]>(MODERATION_CASES);
   const [reservations, setReservations] = useState<Record<string, SellerReservation>>(RESERVATIONS);
-  const [alerts, setAlerts] = useState<AutoMatchAlert[]>(AUTO_MATCH_ALERTS);
+  const [alerts, setAlerts] = useState<AutoMatchAlert[]>([]);
   const [profile, setProfile] = useState<AccountProfile>({ contact: '' });
 
   const { toast, flash } = useToast();
@@ -214,6 +219,31 @@ export default function App() {
         if (!cancelled) setSales(sold);
       } catch (err) {
         if (!cancelled) flash('Could not load sales: ' + (err instanceof Error ? err.message : 'unknown error'));
+      }
+      try {
+        const wishlists = await fetchWishlists();
+        if (!cancelled) {
+          const map: Record<string, string> = {};
+          wishlists.forEach((w: ApiWishlist) => { map[w.itemId] = w.id; });
+          setWishlistMap(map);
+          setWishIds(wishlists.map((w: ApiWishlist) => w.itemId));
+        }
+      } catch {
+        // wishlist failing is non-critical — silently ignore
+      }
+      try {
+        const rules = await fetchMatchRules();
+        if (!cancelled) {
+          setAlerts(rules.map((r: ApiMatchRule) => ({
+            id: r.id,
+            text: r.keyword,
+            cat: r.categoryId,
+            on: r.isActive,
+            liveMatches: r.matches?.length ?? 0,
+          })));
+        }
+      } catch {
+        // match rules failing is non-critical — silently ignore
       }
     })();
     return () => { cancelled = true; };
@@ -403,9 +433,35 @@ export default function App() {
       await deleteListing(id);
       setListings((ls) => ls.filter((l) => l.id !== id));
       setWishIds((w) => w.filter((x) => x !== id));
+      setWishlistMap((m) => { const { [id]: _, ...rest } = m; return rest; });
       flash('Listing deleted.');
     } catch (err) {
       flash('Could not delete: ' + (err instanceof Error ? err.message : 'unknown error'));
+    }
+  };
+
+  const toggleWishlist = async (listing: Listing) => {
+    const isWished = wishIds.includes(listing.id);
+    if (isWished) {
+      const wishlistId = wishlistMap[listing.id];
+      if (!wishlistId) return;
+      try {
+        await removeFromWishlist(wishlistId);
+        setWishIds((w) => w.filter((x) => x !== listing.id));
+        setWishlistMap((m) => { const { [listing.id]: _, ...rest } = m; return rest; });
+        flash('Removed from wishlist.');
+      } catch (err) {
+        flash('Could not remove from wishlist: ' + (err instanceof Error ? err.message : 'unknown error'));
+      }
+    } else {
+      try {
+        const created = await addToWishlist(listing.id);
+        setWishIds((w) => [...w, listing.id]);
+        setWishlistMap((m) => ({ ...m, [listing.id]: created.id }));
+        flash('Added to wishlist! ❤️');
+      } catch (err) {
+        flash('Could not add to wishlist: ' + (err instanceof Error ? err.message : 'unknown error'));
+      }
     }
   };
 
@@ -594,7 +650,7 @@ export default function App() {
           <Route path="/listing/:id" element={(
             <ListingRoute
               listings={listings} loaded={listingsLoaded} loadListing={(id) => fetchListing(id, categories)}
-              wishIds={wishIds} setWishIds={setWishIds} setSelectedId={setSelectedId}
+              wishIds={wishIds} wishlistMap={wishlistMap} onToggleWishlist={toggleWishlist} setSelectedId={setSelectedId}
               placeOrder={placeOrder} openChat={openChat} openReport={openReport} setBlocked={setBlocked} flash={flash}
             />
           )} />
@@ -723,12 +779,58 @@ export default function App() {
               notifyOn={prefs.wishlist}
               onEnableNotify={() => setPrefs((p) => ({ ...p, wishlist: true }))}
               onOpenListing={openListing}
-              onRemove={(id) => { setWishIds((w) => w.filter((x) => x !== id)); flash('Removed from wishlist'); }}
+              onRemove={async (itemId) => {
+                const wishlistId = wishlistMap[itemId];
+                if (!wishlistId) return;
+                try {
+                  await removeFromWishlist(wishlistId);
+                  setWishIds((w) => w.filter((x) => x !== itemId));
+                  setWishlistMap((m) => { const { [itemId]: _, ...rest } = m; return rest; });
+                  flash('Removed from wishlist.');
+                } catch (err) {
+                  flash('Could not remove: ' + (err instanceof Error ? err.message : 'unknown error'));
+                }
+              }}
               onBrowse={() => navigate('/browse')}
-              onCreateAlert={(a) => { setAlerts((as) => [{ id: Date.now(), on: true, liveMatches: 0, ...a }, ...as]); flash('Alert created.'); }}
-              onUpdateAlert={(id, patch) => { setAlerts((as) => as.map((a) => (a.id === id ? { ...a, ...patch } : a))); flash('Alert updated.'); }}
-              onDeleteAlert={(id) => { setAlerts((as) => as.filter((a) => a.id !== id)); flash('Alert deleted.'); }}
-              onToggleAlert={(id) => setAlerts((as) => as.map((a) => (a.id === id ? { ...a, on: !a.on } : a)))}
+              onCreateAlert={async (a) => {
+                const catId = categories.find((c) => c.name === a.cat)?.id;
+                try {
+                  const rule = await createMatchRule({ keyword: a.text, categoryId: catId, isActive: true });
+                  setAlerts((as) => [{ id: rule.id, text: rule.keyword, cat: rule.categoryId, on: rule.isActive, liveMatches: 0 }, ...as]);
+                  flash('Alert created.');
+                } catch (err) {
+                  flash('Could not create alert: ' + (err instanceof Error ? err.message : 'unknown error'));
+                }
+              }}
+              onUpdateAlert={async (id, patch) => {
+                const catId = patch.cat !== 'Any' ? categories.find((c) => c.name === patch.cat)?.id : undefined;
+                try {
+                  const rule = await updateMatchRule(String(id), { keyword: patch.text, ...(catId ? { categoryId: catId } : {}) });
+                  setAlerts((as) => as.map((a) => (a.id === id ? { ...a, text: rule.keyword, cat: rule.categoryId } : a)));
+                  flash('Alert updated.');
+                } catch (err) {
+                  flash('Could not update alert: ' + (err instanceof Error ? err.message : 'unknown error'));
+                }
+              }}
+              onDeleteAlert={async (id) => {
+                try {
+                  await deleteMatchRule(String(id));
+                  setAlerts((as) => as.filter((a) => a.id !== id));
+                  flash('Alert deleted.');
+                } catch (err) {
+                  flash('Could not delete alert: ' + (err instanceof Error ? err.message : 'unknown error'));
+                }
+              }}
+              onToggleAlert={async (id) => {
+                const alert = alerts.find((a) => a.id === id);
+                if (!alert) return;
+                try {
+                  const rule = await updateMatchRule(String(id), { isActive: !alert.on });
+                  setAlerts((as) => as.map((a) => (a.id === id ? { ...a, on: rule.isActive } : a)));
+                } catch (err) {
+                  flash('Could not toggle alert: ' + (err instanceof Error ? err.message : 'unknown error'));
+                }
+              }}
             />
           )} />
 
