@@ -308,6 +308,29 @@ export default function App() {
   const categoryNames = categories.map((c) => c.name);
   const categoryIdOf = (name: string) => categories.find((c) => c.name === name)?.id;
 
+  const createAutoMatchFromSearch = async (keyword: string, category: string) => {
+    const text = keyword.trim();
+    if (!text) {
+      navigate('/wishlist?tab=alerts');
+      return;
+    }
+    const categoryId = category === 'All' ? undefined : categoryIdOf(category);
+    if (category !== 'All' && !categoryId) {
+      const error = new Error('Choose a valid category before creating an auto-match.');
+      flash(error.message);
+      throw error;
+    }
+    try {
+      await createMatchRule({ keyword: text, categoryId, isActive: true });
+      await loadMatchData(categories);
+      navigate('/wishlist?tab=alerts');
+      flash(`Auto-match created for “${text}”.`);
+    } catch (err) {
+      flash('Could not create auto-match: ' + (err instanceof Error ? err.message : 'unknown error'));
+      throw err;
+    }
+  };
+
   const handleSignIn = () => {
     setSigningIn(true);
     signIn();
@@ -700,6 +723,7 @@ export default function App() {
               categories={categoryNames} conditions={CONDITIONS} faculties={FACULTIES}
               counts={counts} totalCount={listings.length} query={query}
               onOpenListing={openListing} onReset={reset}
+              onCreateAutoMatch={createAutoMatchFromSearch}
             />
           )} />
 
@@ -829,6 +853,7 @@ export default function App() {
 
           <Route path="/wishlist" element={(
             <WishlistScreen
+              initialTab={new URLSearchParams(location.search).get('tab') === 'alerts' ? 'alerts' : 'saved'}
               saved={savedAll.filter((l) => l.status !== 'Sold')}
               alerts={alerts} matches={matchHits} categories={categoryNames}
               loading={wishlistLoading || matchLoading}
