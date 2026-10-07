@@ -33,6 +33,7 @@ function toOrder(order: ApiOrder, listing: Listing | null): Order {
     reference: `ORD-${shortCode}`,
     handoverCode: shortCode,
     listingId: order.itemId,
+    sellerId: order.sellerId,
     title: listing?.title ?? 'Unavailable item',
     price: Number(order.agreedPrice),
     seller: listing?.seller ?? 'CU member',

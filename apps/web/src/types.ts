@@ -85,6 +85,7 @@ export interface Order {
   reference: string;
   handoverCode: string;
   listingId: string;
+  sellerId: string;
   title: string;
   price: number;
   seller: string;
@@ -331,6 +332,8 @@ export type HandoverRole = 'buyer' | 'seller';
 export type HandoverStage = 'ready' | 'verifying' | 'done';
 
 export interface ReviewOrderSummary {
+  orderId: string;
+  sellerId: string;
   title: string;
   price: number;
   seller: string;

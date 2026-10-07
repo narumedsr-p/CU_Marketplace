@@ -149,6 +149,11 @@ export default function ProfileScreen({
 
         {active === 'Reviews' && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 12, paddingTop: 18, maxWidth: 720 }}>
+            {!reviews.length && (
+              <div style={{ font: `400 13px/1.6 ${font}`, color: color.muted, padding: '18px 0' }}>
+                No reviews yet.
+              </div>
+            )}
             {reviews.map((r) => (
               <div key={r.id} style={{
                 border: '1px solid ' + color.line, borderRadius: 12, padding: '15px 16px',

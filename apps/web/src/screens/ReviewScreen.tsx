@@ -16,15 +16,18 @@ interface ReviewScreenProps {
   sellerStats?: SellerStats;
   reviewerName?: string;
   submitted?: boolean;
+  submitting?: boolean;
+  error?: string | null;
   tags?: string[];
-  onSubmit?: (payload: { stars: number; tags: string[]; text: string }) => void;
+  onSubmit?: (payload: { stars: number; tags: string[]; text: string }) => Promise<void>;
   onGoHandover: () => void;
   onHome: () => void;
 }
 
 // Rate seller (FR 2.9, UC-02). 0–5 stars + text, buyer only, COMPLETED orders only.
 export default function ReviewScreen({
-  order, sellerStats = { avg: 0, count: 0 }, reviewerName = 'You', submitted, tags = TAGS,
+  order, sellerStats = { avg: 0, count: 0 }, reviewerName = 'You', submitted,
+  submitting = false, error = null, tags = TAGS,
   onSubmit, onGoHandover, onHome,
 }: ReviewScreenProps) {
   const [stars, setStars] = useState<number | null>(null);
@@ -35,6 +38,10 @@ export default function ReviewScreen({
   const pick = (n: number) => setStars(stars === 1 && n === 1 ? 0 : n); // tap 1★ again → 0
   const toggleTag = (t: string) => setPicked(picked.includes(t) ? picked.filter((x) => x !== t) : [...picked, t]);
   const shownStars = stars ?? 0;
+  const submit = async () => {
+    if (!onSubmit || stars === null || submitting) return;
+    try { await onSubmit({ stars, tags: picked, text: text.trim() }); } catch { /* Error is rendered below. */ }
+  };
 
   return (
     <div style={{ padding: '22px 24px 40px' }}>
@@ -90,11 +97,12 @@ export default function ReviewScreen({
               <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginTop: 12 }}>
                 <div style={{ font: `500 11.5px/1 ${font}`, color: color.faint }}>{text.length}/500</div>
                 <Button
-                  size="sm" disabled={stars === null}
-                  onClick={() => onSubmit && onSubmit({ stars: stars ?? 0, tags: picked, text: text.trim() })}
-                  style={{ marginLeft: 'auto', opacity: stars === null ? 0.45 : 1 }}
-                >Submit review</Button>
+                  size="sm" disabled={stars === null || submitting}
+                  onClick={() => { void submit(); }}
+                  style={{ marginLeft: 'auto', opacity: stars === null || submitting ? 0.45 : 1 }}
+                >{submitting ? 'Submitting…' : 'Submit review'}</Button>
               </div>
+              {error && <div style={{ marginTop: 10, font: `500 12px/1.45 ${font}`, color: '#B42318' }}>{error}</div>}
             </div>
           )}
 

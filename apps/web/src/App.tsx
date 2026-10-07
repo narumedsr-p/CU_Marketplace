@@ -28,6 +28,7 @@ import {
   fetchNotificationPreferences, fetchNotifications,
   markAllNotificationsRead as apiMarkAllNotificationsRead, updateNotificationPreferences,
 } from './api/notifications';
+import { createReview, fetchSellerRating, fetchSellerReviews } from './api/reviews';
 
 
 import LoginScreen from './screens/LoginScreen';
@@ -54,14 +55,13 @@ import SellerProfileRoute from './routes/profile/SellerProfileRoute';
 
 import {
   CONDITIONS, FACULTIES, SPOTS,
-  REVIEWS,
   SESSIONS, BLOCKED_USERS,
   THREADS, RESERVATIONS, MODERATION_CASES, AUDIT_LOG, MY_REPORTS,
 } from './data/mockListings';
 import type {
   AccountProfile, AutoMatchAlert, BlockedUser, ChatThread, ChatThreadListing, CurrentUser,
   HandoverOrder, HandoverStage, Listing, ModerationCase, NotificationItem,
-  NotificationPrefDef, NotificationPrefsState, Order, Purchase, ReportTarget, Sale, SellForm, SellerReservation, Suspension, AutoMatchHit,
+  NotificationPrefDef, NotificationPrefsState, Order, Purchase, ReportTarget, Review, Sale, SellerStats, SellForm, SellerReservation, Suspension, AutoMatchHit,
 } from './types';
 
 const EMPTY_FORM: SellForm = {
@@ -183,6 +183,12 @@ export default function App() {
   const [matchLoading, setMatchLoading] = useState(false);
   const [matchError, setMatchError] = useState<string | null>(null);
   const [profile, setProfile] = useState<AccountProfile>({ contact: '' });
+  const [myReviews, setMyReviews] = useState<Review[]>([]);
+  const [myRating, setMyRating] = useState<SellerStats>({ avg: 0, count: 0 });
+  const [reviewStats, setReviewStats] = useState<SellerStats>({ avg: 0, count: 0 });
+  const [reviewSubmitting, setReviewSubmitting] = useState(false);
+  const [reviewError, setReviewError] = useState<string | null>(null);
+  const [reviewSubmitted, setReviewSubmitted] = useState(false);
 
   const { toast, flash } = useToast();
   // Signed in: real rooms from chat-service, live over Socket.IO. Signed out: the demo threads above.
@@ -289,6 +295,14 @@ export default function App() {
     }
   };
 
+  const loadMyReviewData = async () => {
+    const userId = getCurrentUserId();
+    if (!userId) return;
+    const [reviews, rating] = await Promise.all([fetchSellerReviews(userId), fetchSellerRating(userId)]);
+    setMyReviews(reviews);
+    setMyRating(rating);
+  };
+
   useEffect(() => {
     onUnauthorized(() => {
       setLoggedIn(false);
@@ -344,6 +358,7 @@ export default function App() {
       try { await loadMatchData(cats); } catch { /* Error stays visible on the Wishlist screen. */ }
       try { await loadNotificationsData(); } catch { /* Error stays visible on the Notifications screen. */ }
       try { await loadNotificationPreferences(); } catch { /* Error stays visible on the Notifications screen. */ }
+      try { await loadMyReviewData(); } catch { /* A profile can render without review history. */ }
     })();
     return () => { cancelled = true; };
   }, [loggedIn, flash]);
@@ -419,6 +434,60 @@ export default function App() {
       throw err;
     } finally {
       setSavingPreferences(false);
+    }
+  };
+
+  const selectReviewOrder = (nextOrder: Order) => {
+    if (nextOrder.status !== 'Completed' || nextOrder.rated) {
+      flash('Only completed orders that have not been reviewed can be rated.');
+      return false;
+    }
+    setOrder(nextOrder);
+    setReviewSubmitted(false);
+    setReviewError(null);
+    fetchSellerRating(nextOrder.sellerId)
+      .then(setReviewStats)
+      .catch(() => setReviewStats({ avg: 0, count: 0 }));
+    return true;
+  };
+
+  const submitReview = async ({ stars, tags = [], text }: { stars: number; tags?: string[]; text: string }) => {
+    if (!order || order.status !== 'Completed' || order.rated) {
+      const error = new Error('This order is not available for review.');
+      setReviewError(error.message);
+      throw error;
+    }
+    setReviewSubmitting(true);
+    setReviewError(null);
+    const comment = [tags.length ? tags.join(' · ') : '', text.trim()].filter(Boolean).join('\n\n') || undefined;
+    try {
+      await createReview({ orderId: order.id, rating: stars, comment });
+      const [updatedStats, updatedReviews] = await Promise.all([
+        fetchSellerRating(order.sellerId),
+        fetchSellerReviews(order.sellerId),
+      ]);
+      setOrders((items) => items.map((item) => (item.id === order.id ? { ...item, rated: true } : item)));
+      setOrder((current) => current && current.id === order.id ? { ...current, rated: true } : current);
+      setReviewStats(updatedStats);
+      setListings((items) => items.map((item) => (
+        item.sellerId === order.sellerId
+          ? { ...item, rating: updatedStats.avg, reviewCount: updatedStats.count }
+          : item
+      )));
+      if (order.sellerId === getCurrentUserId()) {
+        setMyReviews(updatedReviews);
+        setMyRating(updatedStats);
+      }
+      setReviewSubmitted(true);
+      setRateOpen(false);
+      flash('Review posted. Seller average updated.');
+    } catch (err) {
+      const message = 'Could not post review: ' + (err instanceof Error ? err.message : 'unknown error');
+      setReviewError(message);
+      flash(message);
+      throw err;
+    } finally {
+      setReviewSubmitting(false);
     }
   };
 
@@ -695,11 +764,12 @@ export default function App() {
     price: sellerSale.price, seller: currentUser.name, buyer: sellerSale.buyer, spot: sellerSale.spot, window: '—',
   } : null;
 
-  const reviewOrder = order && !order.rated
-    ? { title: order.title, price: order.price, seller: order.seller, when: order.status === 'Completed' ? 'Today' : order.window, status: order.status }
-    : { title: 'Calculus I & II textbook bundle', price: 400, seller: 'Narumedsr Pitayachamrat', when: '28 Jul 2026', status: 'Completed' as const };
-  const reviewSeller = listings.find((l) => l.seller === reviewOrder.seller);
-  const baseStats = { avg: Number(reviewSeller?.rating ?? 4.8), count: reviewSeller?.reviewCount ?? 26 };
+  const reviewOrder = order
+    ? {
+      orderId: order.id, sellerId: order.sellerId, title: order.title, price: order.price,
+      seller: order.seller, when: order.status === 'Completed' ? 'Today' : order.window, status: order.status,
+    }
+    : null;
 
   // Suspended is full-bleed (no TopNav/AppShell chrome) whether reached from the login gate
   // or the logged-in demo shortcut, so it's checked before either branch.
@@ -729,7 +799,7 @@ export default function App() {
     onScanQr: () => openBuyerHandover(),
     onChat: () => { const l = listings.find((x) => x.id === order?.listingId); if (l) openChat(l); },
     onCancel: () => { if (order) cancelOrder(order); },
-    onRate: () => setRateOpen(true),
+    onRate: () => { if (order && selectReviewOrder(order)) setRateOpen(true); },
     onBrowse: () => navigate('/'),
   };
 
@@ -738,16 +808,16 @@ export default function App() {
       isSelf
       user={currentUser}
       stats={[
-        ['SELLER RATING', '—'],
+        ['SELLER RATING', `${myRating.avg.toFixed(1)} ★`],
         ['ACTIVE LISTINGS', mine.filter((l) => l.status === 'Available').length],
-        ['ITEMS BOUGHT', orders.filter((o) => o.status === 'Completed').length],
+        ['REVIEWS', myRating.count],
         ['JOINED', currentUser.joined || '—'],
       ]}
       listings={mine}
       purchases={purchases}
       sales={sales}
       onShowHandoverCode={(sale) => openSellerHandover(sale.id)}
-      reviews={REVIEWS}
+      reviews={myReviews}
       prefs={prefs}
       notificationPrefs={NOTIFICATION_PREFS}
       onTogglePref={(key) => { void toggleNotificationPreference(key); }}
@@ -827,7 +897,7 @@ export default function App() {
               onScanQr={(o) => openBuyerHandover(o)}
               onChat={(o) => { const l = listings.find((x) => x.id === o.listingId); if (l) openChat(l); }}
               onCancel={cancelOrder}
-              onRate={(o) => { setOrder(o); setRateOpen(true); }}
+              onRate={(o) => { if (selectReviewOrder(o)) setRateOpen(true); }}
               onBrowse={() => navigate('/browse')}
             />
           )} />
@@ -845,34 +915,34 @@ export default function App() {
                 onVerifyCode={verifyHandoverCode}
                 onCancelReservation={isSeller && sellerSale?.status === 'Reserved' ? () => cancelSale(sellerSale.id) : undefined}
                 onChat={() => navigate('/chat')}
-                onRate={() => navigate('/review')}
+                onRate={() => { if (order && selectReviewOrder(order)) navigate('/review'); }}
                 onHome={() => navigate('/')}
               />
             );
           })()} />
 
-          <Route path="/review" element={(
+          <Route path="/review" element={reviewOrder ? (
             <ReviewScreen
               order={reviewOrder}
               reviewerName={currentUser.name}
-              sellerStats={baseStats}
+              sellerStats={reviewStats}
+              submitted={reviewSubmitted || order?.rated}
+              submitting={reviewSubmitting}
+              error={reviewError}
               onGoHandover={() => openBuyerHandover()}
               onHome={() => navigate('/')}
-              onSubmit={() => {
-                if (order && order.status === 'Completed') setOrder((o) => o && { ...o, rated: true });
-                flash('Review posted. Seller average updated.');
-                navigate('/');
-              }}
+              onSubmit={submitReview}
             />
-          )} />
+          ) : <Navigate to="/orders" replace />} />
 
           <Route path="/profile" element={profileScreenElement} />
           <Route path="/profile/:userId" element={(
             <SellerProfileRoute
               listings={listings}
               loadProfile={fetchProfile}
+              loadReviews={fetchSellerReviews}
+              loadRating={fetchSellerRating}
               purchases={purchases}
-              reviews={REVIEWS}
               prefs={prefs}
               notificationPrefs={NOTIFICATION_PREFS}
               onTogglePref={(key) => { void toggleNotificationPreference(key); }}
@@ -1083,7 +1153,9 @@ export default function App() {
       <RateSellerDialog
         open={rateOpen}
         onClose={() => setRateOpen(false)}
-        onSubmit={() => { setRateOpen(false); setOrder((o) => o && { ...o, rated: true }); flash('Rating submitted.'); }}
+        onSubmit={({ stars, text }) => submitReview({ stars, text })}
+        submitting={reviewSubmitting}
+        error={reviewError}
       />
       <Toast message={toast} />
     </>
