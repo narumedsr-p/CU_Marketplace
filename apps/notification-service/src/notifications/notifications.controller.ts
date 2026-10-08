@@ -1,4 +1,4 @@
-import { Controller, Get, Patch } from '@nestjs/common';
+import { Controller, Get, Param, Patch } from '@nestjs/common';
 import { ApiOperation } from '@nestjs/swagger';
 import { UserClaims } from '@workspace/contracts';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
@@ -18,6 +18,12 @@ export class NotificationsController {
   @Patch('read-all')
   markAllAsRead(@CurrentUser() user: UserClaims) {
     return this.notificationsService.markAllAsRead(user.userId);
+  }
+
+  @ApiOperation({ summary: 'markNotificationAsRead()' })
+  @Patch(':notificationId/read')
+  markAsRead(@Param('notificationId') notificationId: string, @CurrentUser() user: UserClaims) {
+    return this.notificationsService.markAsRead(user.userId, notificationId);
   }
 
   // pushInAppNotification moved to gRPC — see notifications.grpc.controller.ts.

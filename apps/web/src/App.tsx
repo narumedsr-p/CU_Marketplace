@@ -26,7 +26,7 @@ import {
 } from './api/wishlist';
 import {
   fetchNotificationPreferences, fetchNotifications,
-  markAllNotificationsRead as apiMarkAllNotificationsRead, updateNotificationPreferences,
+  markAllNotificationsRead as apiMarkAllNotificationsRead, markNotificationRead, updateNotificationPreferences,
 } from './api/notifications';
 import { createReview, fetchSellerRating, fetchSellerReviews } from './api/reviews';
 
@@ -180,6 +180,12 @@ export default function App() {
   // Signed in: real rooms from chat-service, live over Socket.IO. Signed out: the demo threads above.
   const liveChat = useLiveChat(loggedIn, categories);
   const chatThreads = loggedIn ? liveChat.threads : threads;
+  const requestedRoomId = location.pathname === '/chat' ? new URLSearchParams(location.search).get('roomId') : null;
+  useEffect(() => {
+    if (loggedIn && requestedRoomId && liveChat.activeId !== requestedRoomId && liveChat.threads.some((t) => t.id === requestedRoomId)) {
+      liveChat.select(requestedRoomId);
+    }
+  }, [loggedIn, requestedRoomId, liveChat.activeId, liveChat.threads, liveChat.select]);
   const { filters, setFilters, results, counts, reset } = useCatalogFilters(listings, query);
 
   const categoryNameFor = (categoryId: string, availableCategories: ApiCategory[]) => (
@@ -732,15 +738,37 @@ export default function App() {
   };
 
   const unread = notifications.filter((n) => !n.read).length;
-  const openNotification = (n: NotificationItem) => {
-    // The current API only persists a bulk read operation; keep item state in sync
-    // with the server instead of making a local-only per-item read change.
+  const openNotification = async (n: NotificationItem) => {
+    if (!n.read) {
+      try {
+        await markNotificationRead(String(n.id));
+        setNotifications((items) => items.map((item) => (item.id === n.id ? { ...item, read: true } : item)));
+      } catch (err) {
+        flash('Could not mark notification as read: ' + (err instanceof Error ? err.message : 'unknown error'));
+      }
+    }
     const a = n.action;
     if (!a) return;
-    if (a.type === 'listing' && a.listingId) openListing(a.listingId);
-    else if (a.type === 'chat' && a.id !== undefined) { setActiveThread(a.id); navigate('/chat'); }
-    else if (a.type === 'mylistings') navigate('/mylistings');
-    else if (a.type === 'account') navigate('/account');
+    if (a.type === 'listing') {
+      try {
+        const listing = await fetchListing(a.listingId, categories);
+        if (!listing) {
+          flash('This listing is no longer available.');
+          navigate('/browse');
+          return;
+        }
+        openListing(listing);
+      } catch (err) {
+        if (err instanceof ApiError && err.status === 404) {
+          flash('This listing is no longer available.');
+          navigate('/browse');
+        } else {
+          flash('Could not open listing: ' + (err instanceof Error ? err.message : 'unknown error'));
+        }
+      }
+    } else if (a.type === 'order') navigate(`/orders/${encodeURIComponent(a.orderId)}`);
+    else if (a.type === 'chat') navigate(`/chat?roomId=${encodeURIComponent(a.chatRoomId)}`);
+    else if (a.type === 'review') navigate(`/profile?tab=Reviews&reviewId=${encodeURIComponent(a.reviewId)}`);
   };
 
   const currentUserId = getCurrentUserId();
@@ -799,6 +827,8 @@ export default function App() {
   const profileScreenElement = (
     <ProfileScreen
       isSelf
+      initialTab={new URLSearchParams(location.search).get('tab') ?? undefined}
+      focusReviewId={new URLSearchParams(location.search).get('reviewId') ?? undefined}
       user={currentUser}
       stats={[
         ['SELLER RATING', `${myRating.avg.toFixed(1)} ★`],
@@ -886,10 +916,14 @@ export default function App() {
           <Route path="/orders/:orderId" element={(
             <OrderDetailRoute
               orders={orders}
+              sales={sales}
+              currentUserId={currentUser.id}
               onScanQr={(o) => openBuyerHandover(o)}
               onChat={(o) => { const l = listings.find((x) => x.id === o.listingId); if (l) openChat(l); }}
               onCancel={cancelOrder}
               onRate={(o) => { if (selectReviewOrder(o)) setRateOpen(true); }}
+              onShowSellerQr={(sale) => openSellerHandover(sale.id)}
+              onCancelSale={cancelSale}
               onBrowse={() => navigate('/browse')}
             />
           )} />
@@ -1080,12 +1114,22 @@ export default function App() {
 
           <Route path="/chat" element={(
             <ChatScreen
-              threads={chatThreads} activeId={loggedIn ? liveChat.activeId : activeThread} typingId={null}
+              threads={chatThreads} activeId={loggedIn ? (requestedRoomId ?? liveChat.activeId) : activeThread} typingId={null}
+              emptyMessage={requestedRoomId
+                ? liveChat.roomsError ? 'Could not load conversations. Please refresh and try again.'
+                  : liveChat.roomsLoaded ? 'This conversation is no longer available to your account.'
+                    : 'Loading linked conversation…'
+                : undefined}
               onSelectThread={(id) => {
-                if (loggedIn) { liveChat.select(String(id)); return; }
+                if (loggedIn) { liveChat.select(String(id)); if (requestedRoomId) navigate('/chat', { replace: true }); return; }
                 setActiveThread(id); setThreads((ts) => ts.map((t) => (t.id === id ? { ...t, unread: 0 } : t)));
               }}
-              onBack={() => (loggedIn ? liveChat.setActiveId(null) : setActiveThread(null))}
+              onBack={() => {
+                if (loggedIn) {
+                  liveChat.setActiveId(null);
+                  if (requestedRoomId) navigate('/chat', { replace: true });
+                } else setActiveThread(null);
+              }}
               onSend={(id, text) => sendMessage(id, text)}
               onAttachPhoto={() => flash('Photo picker — up to 4 images.')}
               onOpenListing={(l: ChatThreadListing) => openListing(l.id)}

@@ -9,6 +9,7 @@ const KIND: Record<NotificationKind, { bg: string; fg: string; glyph: string }> 
   price: { bg: color.pinkLine, fg: color.pink, glyph: '฿' },
   order: { bg: '#FFF3E0', fg: '#9A5B00', glyph: 'O' },
   chat: { bg: color.ink, fg: color.white, glyph: 'C' },
+  review: { bg: '#FFF3E0', fg: '#9A5B00', glyph: '★' },
   account: { bg: '#F2ECEF', fg: color.body, glyph: '!' },
 };
 
@@ -30,7 +31,7 @@ interface NotificationsScreenProps {
 // Notification Center (FR 6.1–6.4).
 export default function NotificationsScreen({
   notifications = [], prefs = {}, prefItems = [],
-  categories = ['All', 'Auto-match', 'Orders', 'Chat', 'Account'],
+  categories = ['All', 'Auto-match', 'Orders', 'Chat', 'Reviews', 'Account'],
   loading = false, error = null, markingAllRead = false, savingPreferences = false,
   onOpen, onRetry, onMarkAllRead, onTogglePref,
 }: NotificationsScreenProps) {
@@ -84,7 +85,7 @@ export default function NotificationsScreen({
               {list.map((n) => {
                 const k = KIND[n.kind] || KIND.account;
                 return (
-                  <div key={n.id} onClick={() => onOpen(n)} style={{
+                  <div key={n.id} onClick={() => { void onOpen(n); }} style={{
                     display: 'flex', gap: 12, padding: '14px 16px', alignItems: 'flex-start', cursor: 'pointer',
                     background: n.read ? color.white : '#FFF8FB', borderBottom: '1px solid ' + color.lineSoft,
                   }}>

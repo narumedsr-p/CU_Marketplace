@@ -5,6 +5,7 @@ import type { Review, SellerStats } from '../types';
 interface ApiReview {
   id: string;
   orderId: string;
+  itemTitle: string | null;
   reviewerId: string;
   revieweeId: string;
   rating: number;
@@ -33,7 +34,7 @@ export async function fetchSellerReviews(sellerId: string): Promise<Review[]> {
     return {
       id: review.id,
       name: reviewer?.displayName ?? 'CU member',
-      item: 'Verified completed purchase',
+      item: review.itemTitle || 'Verified completed purchase',
       when: reviewDate(review.createdAt),
       stars: review.rating,
       text: review.comment ?? '',

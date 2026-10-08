@@ -1,3 +1,5 @@
+import type { NotificationAction as NotificationTarget } from '@workspace/contracts';
+
 export type ListingStatus = 'Available' | 'Reserved' | 'Sold' | 'Completed' | 'Cancelled' | 'Empty';
 
 // Minimal shape the presentational card/grid components need — lets screens
@@ -196,13 +198,9 @@ export interface ChatThread {
   messages: ChatMessage[];
 }
 
-export type NotificationKind = 'match' | 'price' | 'order' | 'chat' | 'account';
+export type NotificationKind = 'match' | 'price' | 'order' | 'chat' | 'review' | 'account';
 
-export interface NotificationAction {
-  type: string;
-  id?: number;
-  listingId?: string;
-}
+export type NotificationAction = NotificationTarget;
 
 export interface NotificationItem {
   id: string | number;

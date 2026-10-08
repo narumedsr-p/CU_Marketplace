@@ -1,10 +1,12 @@
 import { api } from './client';
-import type { NotificationItem, NotificationKind, NotificationPrefsState } from '../types';
+import type { NotificationAction, NotificationItem, NotificationKind, NotificationPrefsState } from '../types';
 
 interface ApiNotification {
   id: string;
   title: string;
   message: string;
+  kind: NotificationKind | null;
+  action: NotificationAction | null;
   isRead: boolean;
   createdAt: string;
 }
@@ -32,11 +34,13 @@ function classify(title: string, message: string): { kind: NotificationKind; cat
   if (text.includes('match') || text.includes('wishlist')) return { kind: 'match', category: 'Auto-match' };
   if (text.includes('chat') || text.includes('message')) return { kind: 'chat', category: 'Chat' };
   if (text.includes('order') || text.includes('handover') || text.includes('reservation')) return { kind: 'order', category: 'Orders' };
+  if (text.includes('review') || text.includes('rating')) return { kind: 'review', category: 'Reviews' };
   return { kind: 'account', category: 'Account' };
 }
 
 function toNotification(notification: ApiNotification): NotificationItem {
-  const { kind, category } = classify(notification.title, notification.message);
+  const kind = notification.kind ?? classify(notification.title, notification.message).kind;
+  const category = { match: 'Auto-match', price: 'Auto-match', order: 'Orders', chat: 'Chat', review: 'Reviews', account: 'Account' }[kind];
   return {
     id: notification.id,
     kind,
@@ -46,6 +50,7 @@ function toNotification(notification: ApiNotification): NotificationItem {
     time: relativeTime(notification.createdAt),
     group: Date.now() - new Date(notification.createdAt).getTime() < 24 * 60 * 60 * 1000 ? 'today' : 'earlier',
     read: notification.isRead,
+    action: notification.action ?? undefined,
     channel: 'In-app',
   };
 }
@@ -56,6 +61,10 @@ export async function fetchNotifications() {
 
 export function markAllNotificationsRead() {
   return api<{ updatedCount: number }>(`${NOTIFICATIONS}/read-all`, { method: 'PATCH' });
+}
+
+export function markNotificationRead(notificationId: string) {
+  return api<ApiNotification>(`${NOTIFICATIONS}/${encodeURIComponent(notificationId)}/read`, { method: 'PATCH' });
 }
 
 export async function fetchNotificationPreferences(): Promise<NotificationPrefsState> {

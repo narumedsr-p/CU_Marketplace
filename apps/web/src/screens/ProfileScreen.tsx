@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { color, font, baht, gradient, initialsOf } from '../theme/tokens';
 import ListingGrid from '../components/ListingGrid';
 import StatusBadge from '../components/StatusBadge';
@@ -20,6 +20,8 @@ interface ProfileUser {
 interface ProfileScreenProps {
   user: ProfileUser;
   isSelf: boolean;
+  initialTab?: string;
+  focusReviewId?: string;
   stats: [string, string | number][];
   listings: Listing[];
   purchases?: Purchase[];
@@ -42,15 +44,21 @@ interface ProfileScreenProps {
  *   other profile -> Chat with seller; Listings + Reviews only
  */
 export default function ProfileScreen({
-  user, isSelf, stats, listings, purchases = [], sales = [], onShowHandoverCode, reviews = [],
+  user, isSelf, initialTab, focusReviewId, stats, listings, purchases = [], sales = [], onShowHandoverCode, reviews = [],
   prefs = {}, onTogglePref, notificationPrefs = [],
   onEditProfile, onWishlist, onSell, onChat, onOpenListing,
 }: ProfileScreenProps) {
   const tabs = isSelf
     ? ['Listings', 'Purchases', 'Sales', 'Reviews', 'Notifications']
     : ['Listings', 'Reviews'];
-  const [tab, setTab] = useState('Listings');
+  const [tab, setTab] = useState(initialTab ?? 'Listings');
+  useEffect(() => { if (initialTab) setTab(initialTab); }, [initialTab]);
   const active = tabs.includes(tab) ? tab : 'Listings';
+  useEffect(() => {
+    if (active === 'Reviews' && focusReviewId && reviews.some((review) => review.id === focusReviewId)) {
+      document.getElementById(`review-${focusReviewId}`)?.scrollIntoView({ block: 'center' });
+    }
+  }, [active, focusReviewId, reviews]);
 
   return (
     <div style={{ paddingBottom: 40 }}>
@@ -153,7 +161,7 @@ export default function ProfileScreen({
               </div>
             )}
             {reviews.map((r) => (
-              <div key={r.id} style={{
+              <div key={r.id} id={`review-${r.id}`} style={{
                 border: '1px solid ' + color.line, borderRadius: 12, padding: '15px 16px',
               }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>

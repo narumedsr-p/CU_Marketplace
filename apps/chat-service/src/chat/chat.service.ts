@@ -135,6 +135,8 @@ export class ChatService {
         userId: recipientId,
         title: 'New Chat Message',
         message: content,
+        kind: 'chat',
+        action: { type: 'chat', chatRoomId: roomId },
       });
     } catch (err) {
       this.logger.error(`Failed to send notification for chat message in room ${roomId}`, err);

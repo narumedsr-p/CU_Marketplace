@@ -13,6 +13,7 @@ interface ChatScreenProps {
   compact?: boolean;
   height?: number;
   quickReplies?: string[];
+  emptyMessage?: string;
   onSelectThread: (id: number | string) => void;
   onBack: () => void;
   onSend: (threadId: number | string, text: string) => void;
@@ -23,7 +24,7 @@ interface ChatScreenProps {
 // Real-time chat (FR 3.1–3.5, UC-03). Presentational — plug your WebSocket client into the
 // callbacks and push incoming messages into `threads`.
 export default function ChatScreen({
-  threads = [], activeId, typingId, compact = false, height,
+  threads = [], activeId, typingId, compact = false, height, emptyMessage,
   quickReplies = ['Is it still available?', 'Can we meet at the handover spot?', 'What time works for you?'],
   onSelectThread, onBack, onSend, onAttachPhoto, onOpenListing,
 }: ChatScreenProps) {
@@ -31,7 +32,7 @@ export default function ChatScreen({
   const [q, setQ] = useState('');
   const [draft, setDraft] = useState('');
   const scroller = useRef<HTMLDivElement>(null);
-  const cur = threads.find((t) => t.id === activeId) || (compact ? null : threads[0]);
+  const cur = threads.find((t) => t.id === activeId) || (compact || activeId != null ? null : threads[0]);
   const msgCount = cur ? cur.messages.length : 0;
 
   useEffect(() => {
@@ -197,6 +198,11 @@ export default function ChatScreen({
                   Meet at a public campus spot. Never pay before the QR handover.
                 </div>
             </div>
+          </div>
+        )}
+        {!compact && !showConvo && (
+          <div style={{ display: 'grid', placeItems: 'center', padding: 24, font: `500 13px/1.5 ${font}`, color: color.muted, textAlign: 'center' }}>
+            {emptyMessage ?? 'Select a conversation.'}
           </div>
         )}
       </div>

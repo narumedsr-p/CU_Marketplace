@@ -180,6 +180,8 @@ export class AutoMatchService {
             userId: candidate.userId,
             title: 'Auto-Match Alert',
             message: `A new item matching "${candidate.keyword}" was listed: "${item.title}"`,
+            kind: 'match',
+            action: { type: 'listing', listingId: item.id },
           });
         } catch (err) {
           this.logger.error(
