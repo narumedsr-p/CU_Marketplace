@@ -10,7 +10,7 @@ import {
 } from '@nestjs/websockets';
 import { Server, Socket } from 'socket.io';
 import { ChatService } from './chat.service';
-import { ChatMessage } from '../generated/prisma-client/client';
+import { ChatMessageDocument } from './schemas/chat-message.schema';
 
 @WebSocketGateway()
 export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
@@ -68,7 +68,7 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
   }
 
   // Shared by the socket and REST send paths so both push the same event to the same rooms.
-  pushNewMessage(message: ChatMessage, recipientId: string, userId: string) {
+  pushNewMessage(message: ChatMessageDocument, recipientId: string, userId: string) {
     this.server.to(`user:${userId}`).emit('message:new', message);
     this.server.to(`user:${recipientId}`).emit('message:new', message);
   }
