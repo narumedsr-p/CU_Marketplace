@@ -24,7 +24,7 @@ export default function ListingScreen({
   const available = listing.status === 'Available';
 
   const specs: [string, string | number][] = [
-    ['CONDITION', listing.cond ?? ''],
+    ['CONDITION', listing.cond ?? 'Not specified'],
     ['CATEGORY', listing.cat],
     ['SELLER FACULTY', listing.faculty ?? ''],
     ['HANDOVER SPOT', listing.spot],
@@ -86,10 +86,12 @@ export default function ListingScreen({
 
         <div style={{ position: 'sticky', top: 90 }}>
           <div style={{ display: 'flex', gap: 7, flexWrap: 'wrap' }}>
-            <div style={{
-              padding: '4px 9px', borderRadius: 6, background: color.pinkTint,
-              border: '1px solid ' + color.pinkLine, font: `600 11px/1.3 ${font}`, color: '#A81756',
-            }}>{listing.cond}</div>
+            {listing.cond && (
+              <div style={{
+                padding: '4px 9px', borderRadius: 6, background: color.pinkTint,
+                border: '1px solid ' + color.pinkLine, font: `600 11px/1.3 ${font}`, color: '#A81756',
+              }}>{listing.cond}</div>
+            )}
             <StatusBadge status={listing.status} />
           </div>
 

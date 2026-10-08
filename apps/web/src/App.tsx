@@ -61,7 +61,7 @@ import type {
 } from './types';
 
 const EMPTY_FORM: SellForm = {
-  title: '', price: '', cat: 'Electronics', cond: 'Like new', desc: '', spot: 'Sala Phra Kiao',
+  title: '', price: '', cat: '', cond: '', desc: '', spot: '',
 };
 
 const ANY_CATEGORY_ID = '00000000-0000-0000-0000-000000000000';
@@ -624,12 +624,18 @@ export default function App() {
     if (!form.title.trim() || !form.price) { flash('Title and price are required.'); return; }
     const categoryId = categoryIdOf(form.cat);
     if (!categoryId) { flash('Pick a category.'); return; }
+    if (!CONDITIONS.includes(form.cond) || !SPOTS.includes(form.spot)) {
+      flash('Pick a condition and handover spot.');
+      return;
+    }
     try {
       const listing = await createListing({
         title: form.title.trim(),
         description: form.desc.trim(),
         price: Number(form.price),
         categoryId,
+        condition: form.cond,
+        handoverSpot: form.spot,
       }, categories);
       setListings((ls) => [listing, ...ls]);
       setForm(EMPTY_FORM);
@@ -640,9 +646,12 @@ export default function App() {
     }
   };
 
-  const saveListing = async (id: string, patch: { title: string; price: number; desc: string }) => {
+  const saveListing = async (id: string, patch: { title: string; price: number; cond: string; desc: string; spot: string }) => {
     try {
-      const updated = await updateListing(id, { title: patch.title, price: patch.price, description: patch.desc }, categories);
+      const updated = await updateListing(id, {
+        title: patch.title, price: patch.price, description: patch.desc,
+        condition: patch.cond, handoverSpot: patch.spot,
+      }, categories);
       setListings((ls) => ls.map((l) => (l.id === id ? updated : l)));
       flash('Listing updated.');
     } catch (err) {
@@ -939,7 +948,7 @@ export default function App() {
 
           <Route path="/mylistings" element={(
             <MyListingsScreen
-              listings={mine} reservations={reservations} conditions={CONDITIONS}
+              listings={mine} reservations={reservations} conditions={CONDITIONS} spots={SPOTS}
               onSave={saveListing}
               onDelete={removeListing}
               onShowQr={(id) => {

@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   ConflictException,
   ForbiddenException,
   Injectable,
@@ -11,6 +12,20 @@ import { WishlistClient } from "../clients/wishlist.client";
 // Loose enough that typos/partial words still surface results, in line with
 // pg_trgm's own default similarity_threshold (0.3).
 const SEARCH_MIN_SCORE = 0.3;
+const ITEM_CONDITIONS = new Set(["New", "Like new", "Good", "Fair"]);
+
+function validateItemMetadata(data: any) {
+  if (data.condition != null && !ITEM_CONDITIONS.has(data.condition)) {
+    throw new BadRequestException("Invalid item condition");
+  }
+  if (data.handoverSpot != null && (
+    typeof data.handoverSpot !== "string" ||
+    data.handoverSpot.trim().length === 0 ||
+    data.handoverSpot.length > 120
+  )) {
+    throw new BadRequestException("Handover spot must be 1–120 characters");
+  }
+}
 
 export interface ItemSearchRow {
   id: string;
@@ -18,6 +33,8 @@ export interface ItemSearchRow {
   categoryId: string;
   title: string;
   description: string | null;
+  condition: string | null;
+  handoverSpot: string | null;
   price: Prisma.Decimal;
   status: string;
   imageUrls: string[];
@@ -49,6 +66,8 @@ export class ListingsService {
           "category_id" AS "categoryId",
           "title",
           "description",
+          "condition",
+          "handover_spot" AS "handoverSpot",
           "price",
           "status",
           "image_urls" AS "imageUrls",
@@ -79,12 +98,14 @@ export class ListingsService {
   }
 
   async create(data: any) {
+    validateItemMetadata(data);
     const item = await this.prisma.item.create({ data });
     this.wishlistClient.evaluateItem(item);
     return item;
   }
 
   async update(id: string, data: any, callerId: string) {
+    validateItemMetadata(data);
     const item = await this.prisma.item.findUnique({ where: { id } });
     if (!item) {
       throw new NotFoundException("Item not found");

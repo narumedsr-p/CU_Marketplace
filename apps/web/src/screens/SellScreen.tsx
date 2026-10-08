@@ -28,7 +28,7 @@ export default function SellScreen({
     <div style={{ padding: '22px 24px 40px' }}>
       <div style={{ font: `700 22px/1.2 ${font}`, letterSpacing: '-.01em' }}>Post a listing</div>
       <div style={{ font: `400 13.5px/1.6 ${font}`, color: color.muted, marginTop: 6 }}>
-        Target: under 5 minutes end to end. Photos, price, condition and category are required.
+        Add a title, price, category, condition and handover spot. Photo upload is not available yet.
       </div>
 
       <div style={{
@@ -70,6 +70,7 @@ export default function SellScreen({
               style={{ fontWeight: 600 }}
             />
             <Field as="select" label="Category" value={form.cat} onChange={(e: ChangeEvent<HTMLSelectElement>) => set({ cat: e.target.value })}>
+              <option value="" disabled>Select a category</option>
               {categories.map((c) => <option key={c} value={c}>{c}</option>)}
             </Field>
           </div>
@@ -110,7 +111,7 @@ export default function SellScreen({
               showFaculty={false}
               listing={{
                 title: form.title || 'Your title appears here',
-                price: form.price || 0, cat: form.cat, cond: form.cond,
+                price: form.price || 0, cat: form.cat || 'Category', cond: form.cond,
                 rating: '—', sold: 0, status: 'Available',
               }}
             />

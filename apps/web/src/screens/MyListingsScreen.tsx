@@ -18,13 +18,15 @@ interface EditForm {
   price: string;
   cond: string;
   desc: string;
+  spot: string;
 }
 
 interface MyListingsScreenProps {
   listings?: Listing[];
   reservations?: Record<string, SellerReservation>;
   conditions?: string[];
-  onSave?: (id: string, patch: { title: string; price: number; cond: string; desc: string }) => void;
+  spots?: string[];
+  onSave?: (id: string, patch: { title: string; price: number; cond: string; desc: string; spot: string }) => void;
   onDelete?: (id: string) => void;
   onShowQr?: (id: string) => void;
   onCancelReservation?: (id: string) => void;
@@ -33,20 +35,21 @@ interface MyListingsScreenProps {
 
 // Seller's own listings (FR 5.2, 2.5). Edit is blocked while RESERVED (PATCH /listings/:id rule).
 export default function MyListingsScreen({
-  listings = [], reservations = {}, conditions = ['New', 'Like new', 'Good', 'Fair'],
+  listings = [], reservations = {}, conditions = ['New', 'Like new', 'Good', 'Fair'], spots = [],
   onSave, onDelete, onShowQr, onCancelReservation, onNew,
 }: MyListingsScreenProps) {
   const [tab, setTab] = useState<ListingTab>('Active');
   const [editId, setEditId] = useState<string | null>(null);
   const [delId, setDelId] = useState<string | null>(null);
-  const [form, setForm] = useState<EditForm>({ title: '', price: '', cond: '', desc: '' });
+  const [form, setForm] = useState<EditForm>({ title: '', price: '', cond: '', desc: '', spot: '' });
   const rows = listings.filter((l) => tabOf(l) === tab);
   const count = (t: ListingTab) => listings.filter((l) => tabOf(l) === t).length;
 
-  const startEdit = (l: Listing) => { setDelId(null); setEditId(l.id); setForm({ title: l.title, price: String(l.price), cond: l.cond ?? '', desc: l.desc || '' }); };
+  const startEdit = (l: Listing) => { setDelId(null); setEditId(l.id); setForm({ title: l.title, price: String(l.price), cond: l.cond ?? '', desc: l.desc || '', spot: l.spot }); };
   const save = () => {
     if (!form.title.trim() || !form.price || editId === null) return;
-    onSave && onSave(editId, { title: form.title.trim(), price: Number(form.price), cond: form.cond, desc: form.desc });
+    if (!conditions.includes(form.cond) || !spots.includes(form.spot)) return;
+    onSave && onSave(editId, { title: form.title.trim(), price: Number(form.price), cond: form.cond, desc: form.desc, spot: form.spot });
     setEditId(null);
   };
 
@@ -80,7 +83,7 @@ export default function MyListingsScreen({
                   </div>
                   <div style={{ font: `700 16px/1 ${font}`, color: color.pink, marginTop: 7 }}>{baht(l.price)}</div>
                   <div style={{ font: `500 12px/1.5 ${font}`, color: color.muted, marginTop: 5 }}>
-                    {l.cond} · {l.cat} · posted {l.posted} · {l.watchers} wishlisted
+                    {l.cond ? `${l.cond} · ` : ''}{l.cat} · posted {l.posted} · {l.watchers} wishlisted
                   </div>
                 </div>
                 {l.status === 'Available' && editId !== l.id && (
@@ -121,13 +124,25 @@ export default function MyListingsScreen({
                       <Field label="Price ฿" inputMode="numeric" value={form.price} onChange={(e: ChangeEvent<HTMLInputElement>) => setForm({ ...form, price: e.target.value.replace(/[^0-9]/g, '') })} />
                     </div>
                   </div>
-                  <div style={{ display: 'flex', gap: 7, flexWrap: 'wrap' }}>
-                    {conditions.map((c) => <Chip key={c} size="sm" active={form.cond === c} onClick={() => setForm({ ...form, cond: c })}>{c}</Chip>)}
+                  <div>
+                    <div style={{ font: `600 12px/1.4 ${font}`, color: color.muted, marginBottom: 7 }}>Condition</div>
+                    <div style={{ display: 'flex', gap: 7, flexWrap: 'wrap' }}>
+                      {conditions.map((c) => <Chip key={c} size="sm" active={form.cond === c} onClick={() => setForm({ ...form, cond: c })}>{c}</Chip>)}
+                    </div>
                   </div>
+                  <div>
+                    <div style={{ font: `600 12px/1.4 ${font}`, color: color.muted, marginBottom: 7 }}>Handover spot</div>
+                    <div style={{ display: 'flex', gap: 7, flexWrap: 'wrap' }}>
+                      {spots.map((spot) => <Chip key={spot} size="sm" active={form.spot === spot} onClick={() => setForm({ ...form, spot })}>{spot}</Chip>)}
+                    </div>
+                  </div>
+                  {(!conditions.includes(form.cond) || !spots.includes(form.spot)) && (
+                    <div style={{ font: `500 12px/1.4 ${font}`, color: color.muted }}>Choose a condition and handover spot to save this listing.</div>
+                  )}
                   <Field label="Description" as="textarea" rows={3} value={form.desc} onChange={(e: ChangeEvent<HTMLTextAreaElement>) => setForm({ ...form, desc: e.target.value })} />
                   <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
                     <Button size="sm" variant="ghost" onClick={() => setEditId(null)}>Cancel</Button>
-                    <Button size="sm" onClick={save}>Save changes</Button>
+                    <Button size="sm" disabled={!conditions.includes(form.cond) || !spots.includes(form.spot)} onClick={save}>Save changes</Button>
                   </div>
                 </div>
               )}

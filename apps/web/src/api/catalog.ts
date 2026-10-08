@@ -13,6 +13,8 @@ interface ApiItem {
   categoryId: string;
   title: string;
   description: string | null;
+  condition: string | null;
+  handoverSpot: string | null;
   price: string;
   status: 'Available' | 'Reserved' | 'Sold' | 'Suspended';
   imageUrls: string[];
@@ -24,6 +26,8 @@ export interface NewListing {
   description: string;
   price: number;
   categoryId: string;
+  condition: string;
+  handoverSpot: string;
 }
 
 const CATALOG = '/api/v1/catalog';
@@ -59,11 +63,12 @@ async function toListings(items: ApiItem[], categories: ApiCategory[]): Promise<
       seller: profile?.displayName ?? 'CU member',
       since: profile ? memberSince(profile) : '—',
       desc: item.description ?? '',
+      cond: item.condition ?? undefined,
       status: toListingStatus(item.status),
       photo: item.imageUrls[0],
       photos: item.imageUrls,
       posted: timeAgo(item.createdAt),
-      spot: '—',
+      spot: item.handoverSpot ?? 'To be arranged in chat',
       rating: '—',
       reviewCount: 0,
       sold: 0,
