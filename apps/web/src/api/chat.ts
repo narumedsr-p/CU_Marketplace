@@ -12,6 +12,14 @@ export interface ApiChatMessage {
   updatedAt: string;
 }
 
+export interface ApiLastMessage {
+  messageId: string;
+  senderId: string | null;
+  content: string;
+  isSystemMsg: boolean;
+  createdAt: string;
+}
+
 export interface ApiChatRoom {
   id: string;
   participant1: string;
@@ -20,7 +28,7 @@ export interface ApiChatRoom {
   createdAt: string;
   updatedAt: string;
   // GET /rooms includes only the latest message per room; full history comes from fetchRoomMessages.
-  messages?: ApiChatMessage[];
+  lastMessage: ApiLastMessage | null;
 }
 
 export function fetchRooms() {

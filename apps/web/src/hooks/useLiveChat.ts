@@ -17,6 +17,12 @@ function toMessage(m: ApiChatMessage, me: string | null): ChatMessage {
   };
 }
 
+function lastMessageOf(room: ApiChatRoom): ApiChatMessage[] {
+  const last = room.lastMessage;
+  if (!last) return [];
+  return [{ ...last, id: last.messageId, roomId: room.id, senderId: last.senderId ?? '', updatedAt: last.createdAt }];
+}
+
 async function toThread(room: ApiChatRoom, me: string | null, categories: ApiCategory[]): Promise<ChatThread> {
   const peerId = room.participant1 === me ? room.participant2 : room.participant1;
   const [profile, listing] = await Promise.all([
@@ -30,7 +36,7 @@ async function toThread(room: ApiChatRoom, me: string | null, categories: ApiCat
     listing: listing
       ? { id: listing.id, title: listing.title, price: listing.price, status: listing.status, photo: listing.photos?.[0] }
       : { id: room.itemId, title: 'Listing', price: 0, status: 'Available' },
-    messages: (room.messages ?? []).map((m) => toMessage(m, me)),
+    messages: lastMessageOf(room).map((m) => toMessage(m, me)),
   };
 }
 

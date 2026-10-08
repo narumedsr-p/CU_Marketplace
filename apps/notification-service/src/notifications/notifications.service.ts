@@ -1,23 +1,25 @@
 import { BadRequestException, Injectable, Logger } from '@nestjs/common';
-import { PrismaClient } from '../generated/prisma-client/client';
-import { PrismaPg } from '@prisma/adapter-pg';
+import { InjectModel } from '@nestjs/mongoose';
+import { Model } from 'mongoose';
+import { Notification } from './schemas/notification.schema';
+import { NotificationPreference } from '../preferences/schemas/notification-preference.schema';
 
 @Injectable()
 export class NotificationsService {
-  private readonly prisma = new PrismaClient({
-    adapter: new PrismaPg({ connectionString: process.env.DATABASE_URL! }),
-  });
   private readonly logger = new Logger(NotificationsService.name);
+
+  constructor(
+    @InjectModel(Notification.name) private readonly notificationModel: Model<Notification>,
+    @InjectModel(NotificationPreference.name)
+    private readonly preferenceModel: Model<NotificationPreference>,
+  ) {}
 
   async findAll(userId: string) {
     if (!userId) {
       throw new BadRequestException('User ID is required');
     }
 
-    return this.prisma.notification.findMany({
-      where: { userId },
-      orderBy: { createdAt: 'desc' },
-    });
+    return this.notificationModel.find({ userId }).sort({ createdAt: -1 });
   }
 
   async create(data: any) {
@@ -26,22 +28,18 @@ export class NotificationsService {
     }
 
     // Check user's notification preferences
-    const pref = await this.prisma.notificationPreference.findUnique({
-      where: { userId: data.userId },
-    });
+    const pref = await this.preferenceModel.findById(data.userId);
 
     if (pref && pref.inAppEnabled === false) {
       this.logger.log(`Skipping in-app notification for user ${data.userId} per preferences`);
       return { skipped: true, reason: 'in_app_disabled' };
     }
 
-    return this.prisma.notification.create({
-      data: {
-        userId: data.userId,
-        title: data.title,
-        message: data.message,
-        isRead: false,
-      },
+    return this.notificationModel.create({
+      userId: data.userId,
+      title: data.title,
+      message: data.message,
+      isRead: false,
     });
   }
 
@@ -50,11 +48,11 @@ export class NotificationsService {
       throw new BadRequestException('User ID is required');
     }
 
-    const result = await this.prisma.notification.updateMany({
-      where: { userId, isRead: false },
-      data: { isRead: true },
-    });
+    const result = await this.notificationModel.updateMany(
+      { userId, isRead: false },
+      { $set: { isRead: true } },
+    );
 
-    return { updatedCount: result.count };
+    return { updatedCount: result.modifiedCount };
   }
 }
