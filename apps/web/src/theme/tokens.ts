@@ -32,23 +32,11 @@ export const status: Record<ListingStatus, { bg: string; fg: string }> = {
   Cancelled: { bg: '#FDECEF', fg: '#A11B3C' },
 };
 
-// Broader status tint map for Pill (listing/order states plus moderation-case and
-// listing-management states that don't belong on the strict ListingStatus union).
+// Status tint map for listing and order labels.
 export const pillStatus: Record<string, { bg: string; fg: string }> = {
   ...status,
   Hidden: { bg: '#F2ECEF', fg: '#7A6570' },
   Active: { bg: '#EAF7EE', fg: '#1E7A44' },
-  // moderation case states (FR 7.3)
-  Pending: { bg: '#FFF3E0', fg: '#9A5B00' },
-  'In review': { bg: '#FFE4EF', fg: '#8E0F45' },
-  Closed: { bg: '#EAF7EE', fg: '#1E7A44' },
-  Dismissed: { bg: '#F2ECEF', fg: '#7A6570' },
-};
-
-export const severity: Record<string, { bg: string; fg: string }> = {
-  High: { bg: '#FDECEF', fg: '#A11B3C' },
-  Medium: { bg: '#FFF3E0', fg: '#9A5B00' },
-  Low: { bg: '#F2ECEF', fg: '#7A6570' },
 };
 
 export const danger = { fg: '#A11B3C', bg: '#FDECEF', line: '#F6C9D3' };

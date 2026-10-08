@@ -17,8 +17,6 @@ interface ChatScreenProps {
   onBack: () => void;
   onSend: (threadId: number | string, text: string) => void;
   onAttachPhoto: (threadId: number | string) => void;
-  onToggleBlock: (thread: ChatThread) => void;
-  onReport: (thread: ChatThread) => void;
   onOpenListing: (listing: ChatThreadListing) => void;
 }
 
@@ -27,7 +25,7 @@ interface ChatScreenProps {
 export default function ChatScreen({
   threads = [], activeId, typingId, compact = false, height,
   quickReplies = ['Is it still available?', 'Can we meet at the handover spot?', 'What time works for you?'],
-  onSelectThread, onBack, onSend, onAttachPhoto, onToggleBlock, onReport, onOpenListing,
+  onSelectThread, onBack, onSend, onAttachPhoto, onOpenListing,
 }: ChatScreenProps) {
   const resolvedHeight = height ?? (compact ? 640 : 620);
   const [q, setQ] = useState('');
@@ -89,7 +87,7 @@ export default function ChatScreen({
                         font: `400 12.5px/1.4 ${font}`, color: t.unread ? color.ink : color.muted, marginTop: 3,
                         whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
                       }}>
-                        {t.blocked ? 'Blocked' : (last?.from === 'me' ? 'You: ' : '') + (last?.image ? 'Photo' : last?.text || '')}
+                        {(last?.from === 'me' ? 'You: ' : '') + (last?.image ? 'Photo' : last?.text || '')}
                       </div>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 5 }}>
                         <div style={{ flex: 1, minWidth: 0, font: `500 11.5px/1.3 ${font}`, color: color.faint, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
@@ -116,12 +114,10 @@ export default function ChatScreen({
               <Avatar name={cur.name} size={38} />
               <div style={{ flex: 1, minWidth: 0 }}>
                 <div style={{ font: `600 14.5px/1.3 ${font}`, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{cur.name}</div>
-                <div style={{ font: `500 12px/1.3 ${font}`, color: cur.online && !cur.blocked ? '#1E7A44' : color.faint, marginTop: 2 }}>
-                  {cur.blocked ? 'Blocked' : cur.presence || (cur.online ? 'Online now' : 'Offline')}{cur.faculty ? ' · ' + cur.faculty : ''}
+                <div style={{ font: `500 12px/1.3 ${font}`, color: cur.online ? '#1E7A44' : color.faint, marginTop: 2 }}>
+                  {cur.presence || (cur.online ? 'Online now' : 'Offline')}{cur.faculty ? ' · ' + cur.faculty : ''}
                 </div>
               </div>
-              <span onClick={() => onReport(cur)} style={{ font: `600 12px/1 ${font}`, color: color.muted, cursor: 'pointer' }}>Report</span>
-              <span onClick={() => onToggleBlock(cur)} style={{ font: `600 12px/1 ${font}`, color: color.muted, cursor: 'pointer' }}>{cur.blocked ? 'Unblock' : 'Block'}</span>
             </div>
 
             <div onClick={() => onOpenListing(cur.listing)} style={{
@@ -167,20 +163,14 @@ export default function ChatScreen({
                   </div>
                 );
               })}
-              {typingId === cur.id && !cur.blocked && (
+              {typingId === cur.id && (
                 <div style={{ flex: 'none', alignSelf: 'flex-start', padding: '9px 14px', borderRadius: '14px 14px 14px 4px', background: color.white, border: '1px solid ' + color.line, font: `500 12.5px/1.4 ${font}`, color: color.faint }}>
                   {shortName(cur.name)} is typing…
                 </div>
               )}
             </div>
 
-            {cur.blocked ? (
-              <div style={{ padding: 16, borderTop: '1px solid ' + color.line, font: `500 13px/1.5 ${font}`, color: color.muted, textAlign: 'center' }}>
-                You blocked this user. Messages can't be sent or received.{' '}
-                <span onClick={() => onToggleBlock(cur)} style={{ color: color.pink, fontWeight: 600, cursor: 'pointer' }}>Unblock</span>
-              </div>
-            ) : (
-              <div style={{ borderTop: '1px solid ' + color.line, padding: '10px 12px 12px' }}>
+            <div style={{ borderTop: '1px solid ' + color.line, padding: '10px 12px 12px' }}>
                 <div style={{ display: 'flex', gap: 6, overflowX: 'auto', paddingBottom: 9 }}>
                   {quickReplies.map((r) => (
                     <div key={r} onClick={() => send(r)} style={{
@@ -206,8 +196,7 @@ export default function ChatScreen({
                 <div style={{ font: `400 11px/1.5 ${font}`, color: color.faint, marginTop: 8 }}>
                   Meet at a public campus spot. Never pay before the QR handover.
                 </div>
-              </div>
-            )}
+            </div>
           </div>
         )}
       </div>

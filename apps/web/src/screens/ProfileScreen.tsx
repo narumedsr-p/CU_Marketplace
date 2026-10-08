@@ -33,19 +33,18 @@ interface ProfileScreenProps {
   onWishlist: () => void;
   onSell: () => void;
   onChat: () => void;
-  onReport: () => void;
   onOpenListing: (listing: Listing) => void;
 }
 
 /**
  * isSelf gates everything private:
  *   own profile   -> Edit profile, Wishlist, +Sell, Purchases tab, Sales tab, Notifications tab
- *   other profile -> Chat with seller, Report; Listings + Reviews only
+ *   other profile -> Chat with seller; Listings + Reviews only
  */
 export default function ProfileScreen({
   user, isSelf, stats, listings, purchases = [], sales = [], onShowHandoverCode, reviews = [],
   prefs = {}, onTogglePref, notificationPrefs = [],
-  onEditProfile, onWishlist, onSell, onChat, onReport, onOpenListing,
+  onEditProfile, onWishlist, onSell, onChat, onOpenListing,
 }: ProfileScreenProps) {
   const tabs = isSelf
     ? ['Listings', 'Purchases', 'Sales', 'Reviews', 'Notifications']
@@ -88,7 +87,6 @@ export default function ProfileScreen({
             ) : (
               <>
                 <Button size="sm" onClick={onChat}>Chat with seller</Button>
-                <Button size="sm" variant="ghost" onClick={onReport}>Report</Button>
               </>
             )}
           </div>

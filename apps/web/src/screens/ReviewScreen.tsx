@@ -147,7 +147,7 @@ export default function ReviewScreen({
             </div>
           </div>
           <div style={{ font: `400 12px/1.6 ${font}`, color: color.faint, textWrap: 'pretty' }}>
-            Keep it about the item and the handover. Reviews with personal details or contact info are removed by moderators.
+            Keep it about the item and the handover. Avoid sharing personal details or contact information.
           </div>
         </div>
       </div>

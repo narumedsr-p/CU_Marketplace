@@ -17,7 +17,6 @@ export interface ApiChatRoom {
   participant1: string;
   participant2: string;
   itemId: string;
-  isBlocked: boolean;
   createdAt: string;
   updatedAt: string;
   // GET /rooms includes only the latest message per room; full history comes from fetchRoomMessages.

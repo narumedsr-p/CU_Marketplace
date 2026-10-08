@@ -131,58 +131,6 @@ export interface SellForm {
   spot: string;
 }
 
-export interface AdminCategory {
-  id?: string;
-  name: string;
-  slug: string;
-  count: number;
-}
-
-export type CaseSeverity = 'High' | 'Medium' | 'Low';
-
-export interface EvidenceItem {
-  k: string;
-  v: string;
-}
-
-export interface ModerationCase {
-  id: string;
-  type: ReportType;
-  sev: CaseSeverity;
-  state: ReportCaseState;
-  title: string;
-  target: string;
-  targetFac: string;
-  reason: string;
-  reporter: string;
-  when: string;
-  count: number;
-  note: string;
-  evidence: EvidenceItem[];
-  activeListings: number;
-  accountAge: string;
-  prior: string;
-  resolution?: string;
-}
-
-export type AuditKind = 'Moderation' | 'Categories' | 'System';
-
-export interface AuditEntry {
-  id?: string;
-  t: string;
-  actor: string;
-  code: string;
-  target: string;
-  detail: string;
-  kind: AuditKind;
-  fresh?: boolean;
-}
-
-export interface SuspendPayload {
-  duration: '7 days' | '30 days' | 'Permanent ban';
-  reason: string;
-}
-
 export interface AutoMatchAlert {
   id: string | number;
   text: string;
@@ -219,22 +167,6 @@ export interface Session {
   meta: string;
 }
 
-export type ReportCaseState = 'Pending' | 'In review' | 'Closed' | 'Dismissed';
-
-export interface MyReportSummary {
-  id: string;
-  title: string;
-  state: ReportCaseState;
-  reason: string;
-  when: string;
-  resolution?: string;
-}
-
-export interface BlockedUser {
-  name: string;
-  since: string;
-}
-
 export interface ChatMessage {
   id?: string;
   from: 'me' | 'them' | 'system';
@@ -260,31 +192,8 @@ export interface ChatThread {
   online?: boolean;
   presence?: string;
   unread: number;
-  blocked: boolean;
   listing: ChatThreadListing;
   messages: ChatMessage[];
-}
-
-export type ReportType = 'Listing' | 'User' | 'Order';
-
-export interface ReportTarget {
-  type: ReportType;
-  title?: string;
-  target: string;
-  orderRef?: string;
-}
-
-export interface ReportPhoto {
-  src: string;
-}
-
-export interface ReportSubmission {
-  type: ReportType;
-  reason: string;
-  text: string;
-  photos: ReportPhoto[];
-  attachLinked: boolean;
-  target: ReportTarget;
 }
 
 export type NotificationKind = 'match' | 'price' | 'order' | 'chat' | 'account';
@@ -345,13 +254,4 @@ export interface ReviewOrderSummary {
 export interface SellerStats {
   avg: number;
   count: number;
-}
-
-export interface Suspension {
-  until?: string;
-  reason: string;
-  caseId: string;
-  since: string;
-  duration?: string;
-  permanent?: boolean;
 }

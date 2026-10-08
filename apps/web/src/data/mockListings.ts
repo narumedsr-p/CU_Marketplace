@@ -1,6 +1,6 @@
 import type {
-  AccountProfile, AccountUser, AuditEntry, AutoMatchAlert, BlockedUser, ChatThread,
-  CurrentUser, Listing, ModerationCase, MyReportSummary,
+  AccountProfile, AccountUser, AutoMatchAlert, ChatThread,
+  CurrentUser, Listing,
   Purchase, Review, SellerReservation, Session,
 } from '../types';
 
@@ -57,13 +57,9 @@ export const SESSIONS: Session[] = [
   { id: 's2', device: 'Safari on iPhone', meta: 'Bangkok · last active 2h ago' },
 ];
 
-export const BLOCKED_USERS: BlockedUser[] = [
-  { name: 'Win Prasert', since: '26 Sep 2026' },
-];
-
 export const THREADS: ChatThread[] = [
   {
-    id: 1, name: 'Kannawich Munsak', faculty: 'Engineering', online: true, presence: 'Online now', unread: 1, blocked: false,
+    id: 1, name: 'Kannawich Munsak', faculty: 'Engineering', online: true, presence: 'Online now', unread: 1,
     listing: { id: '10000000-0000-0000-0000-000000000001', title: 'iPad Air 4 64GB, Wi-Fi, space grey', price: 8900, status: 'Available' },
     messages: [
       { id: 'm1', from: 'them', text: 'Hi! Yes, it’s still available.', time: '14:02' },
@@ -71,7 +67,7 @@ export const THREADS: ChatThread[] = [
     ],
   },
   {
-    id: 2, name: 'Ploy Wanichkul', faculty: 'Fine Arts', online: false, presence: 'Active 1h ago', unread: 0, blocked: false,
+    id: 2, name: 'Ploy Wanichkul', faculty: 'Fine Arts', online: false, presence: 'Active 1h ago', unread: 0,
     listing: { id: '10000000-0000-0000-0000-000000000005', title: 'Wacom Intuos S drawing tablet with pen', price: 1450, status: 'Available' },
     messages: [
       { id: 'm3', from: 'system', text: 'Chat started from the listing page' },
@@ -87,31 +83,4 @@ export const RESERVATIONS: Record<string, SellerReservation> = {
 export const AUTO_MATCH_ALERTS: AutoMatchAlert[] = [
   { id: 1, text: 'fx-991', cat: 'Electronics', on: true, liveMatches: 1 },
   { id: 2, text: 'lab coat M', cat: 'Any', on: true, liveMatches: 0 },
-];
-
-export const MODERATION_CASES: ModerationCase[] = [
-  {
-    id: 'CASE-1042', type: 'Listing', sev: 'High', state: 'Pending',
-    title: '“Official” CU jersey 2025 at 3× retail', target: 'Jirayu Kaewmanee', targetFac: 'Economics',
-    reason: 'Counterfeit or misleading', reporter: 'Mint R.', when: '12 min ago', count: 3,
-    note: 'Tag photo shows a different logo from the co-op store.',
-    evidence: [{ k: 'Listing photos', v: '4 photos · tag photo flagged' }, { k: 'Order history', v: '5 completed, 2 disputed' }],
-    activeListings: 6, accountAge: '4 months', prior: '1 warning (Aug)',
-  },
-  {
-    id: 'CASE-1031', type: 'Listing', sev: 'High', state: 'Closed',
-    title: 'Replica CU jersey sold as official', target: 'Jirayu Kaewmanee', targetFac: 'Economics',
-    reason: 'Counterfeit or misleading', reporter: 'You', when: 'Mon', count: 3,
-    note: 'Print peeled after one wash.', evidence: [{ k: 'Listing photos', v: '2 photos' }],
-    activeListings: 6, accountAge: '4 months', prior: 'none', resolution: 'Listing removed · seller warned.',
-  },
-];
-
-export const AUDIT_LOG: AuditEntry[] = [
-  { id: 'a1', t: '14:02', actor: 'You (admin)', code: 'REPORT_REVIEW', target: 'CASE-1042', detail: 'Pending → In review', kind: 'Moderation' },
-  { id: 'a2', t: '09:14', actor: 'System', code: 'AUTOMATCH_EVAL', target: 'Listing #13', detail: '1 alert matched', kind: 'System' },
-];
-
-export const MY_REPORTS: MyReportSummary[] = [
-  { id: 'CASE-1031', title: 'Replica CU jersey sold as official', state: 'Closed', reason: 'Counterfeit or misleading', when: 'Mon', resolution: 'Listing removed · seller warned.' },
 ];

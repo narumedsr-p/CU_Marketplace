@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Routes, Route, Navigate, useLocation, useNavigate, useParams } from 'react-router-dom';
 import GlobalStyles from './theme/GlobalStyles';
 import AppShell from './layout/AppShell';
@@ -14,7 +14,7 @@ import {
   createListing, deleteListing, fetchCategories, fetchListing, fetchListings, updateListing,
   type ApiCategory,
 } from './api/catalog';
-import { fetchMyProfile, fetchProfile, toUser, updateMyProfile, type ApiProfile } from './api/profiles';
+import { deleteMyAccount, fetchMyProfile, fetchProfile, toUser, updateMyProfile, type ApiProfile } from './api/profiles';
 import {
   cancelOrder as apiCancelOrder, cancelOrderById, completeHandover, fetchMyOrders, fetchOrderStatus,
   formatHandoverCode, getHandoverQr, getPurchasesItem, normalizeHandoverCode, placeOrder as apiPlaceOrder,
@@ -37,16 +37,12 @@ import ListingScreen from './screens/ListingScreen';
 import SellScreen from './screens/SellScreen';
 import OrderScreen from './screens/OrderScreen';
 import ProfileScreen from './screens/ProfileScreen';
-import AdminCategoriesScreen from './screens/AdminCategoriesScreen';
 import AccountScreen from './screens/AccountScreen';
 import ChatScreen from './screens/ChatScreen';
 import HandoverScreen from './screens/HandoverScreen';
-import ModerationScreen from './screens/ModerationScreen';
 import MyListingsScreen from './screens/MyListingsScreen';
 import NotificationsScreen from './screens/NotificationsScreen';
-import ReportScreen from './screens/ReportScreen';
 import ReviewScreen from './screens/ReviewScreen';
-import SuspendedScreen from './screens/SuspendedScreen';
 import WishlistScreen from './screens/WishlistScreen';
 import ListingsRoute from './routes/listings/ListingsRoute';
 import OrdersRoute from './routes/orders/OrdersRoute';
@@ -55,22 +51,17 @@ import SellerProfileRoute from './routes/profile/SellerProfileRoute';
 
 import {
   CONDITIONS, FACULTIES, SPOTS,
-  SESSIONS, BLOCKED_USERS,
-  THREADS, RESERVATIONS, MODERATION_CASES, AUDIT_LOG, MY_REPORTS,
+  SESSIONS,
+  THREADS, RESERVATIONS,
 } from './data/mockListings';
 import type {
-  AccountProfile, AutoMatchAlert, BlockedUser, ChatThread, ChatThreadListing, CurrentUser,
-  HandoverOrder, HandoverStage, Listing, ModerationCase, NotificationItem,
-  NotificationPrefDef, NotificationPrefsState, Order, Purchase, ReportTarget, Review, Sale, SellerStats, SellForm, SellerReservation, Suspension, AutoMatchHit,
+  AccountProfile, AutoMatchAlert, ChatThread, ChatThreadListing, CurrentUser,
+  HandoverOrder, HandoverStage, Listing, NotificationItem,
+  NotificationPrefDef, NotificationPrefsState, Order, Purchase, Review, Sale, SellerStats, SellForm, SellerReservation, AutoMatchHit,
 } from './types';
 
 const EMPTY_FORM: SellForm = {
   title: '', price: '', cat: 'Electronics', cond: 'Like new', desc: '', spot: 'Sala Phra Kiao',
-};
-
-const DEMO_SUSPENSION: Suspension = {
-  until: '4 Oct 2026', reason: 'Selling counterfeit goods — CU jersey listed as "official".',
-  caseId: 'CASE-1042', since: '27 Sep 2026', duration: '7 days',
 };
 
 const ANY_CATEGORY_ID = '00000000-0000-0000-0000-000000000000';
@@ -90,15 +81,12 @@ interface ListingRouteProps {
   setSelectedId: (id: string) => void;
   placeOrder: (listing: Listing) => void;
   openChat: (listing: Listing) => void;
-  openReport: (target: ReportTarget) => void;
-  setBlocked: (fn: (b: BlockedUser[]) => BlockedUser[]) => void;
-  flash: (msg: string) => void;
 }
 
 // Reads :id from the URL and keeps `selectedId` in sync so a direct link / refresh / back
 // button resolves to the right listing.
 function ListingRoute({
-  listings, loaded, loadListing, wishIds, wishlistMap, onToggleWishlist, setSelectedId, placeOrder, openChat, openReport, setBlocked, flash,
+  listings, loaded, loadListing, wishIds, wishlistMap, onToggleWishlist, setSelectedId, placeOrder, openChat,
 }: ListingRouteProps) {
   const { id = '' } = useParams<{ id: string }>();
   const navigate = useNavigate();
@@ -124,8 +112,6 @@ function ListingRoute({
       onChat={() => openChat(listing)}
       onToggleWishlist={() => onToggleWishlist(listing)}
       onViewSeller={() => { if (listing.sellerId) navigate('/profile/' + listing.sellerId); }}
-      onReport={() => openReport({ type: 'Listing', title: listing.title, target: listing.seller })}
-      onBlock={() => { setBlocked((b) => [...b, { name: listing.seller, since: 'today' }]); flash(listing.seller + ' blocked.'); }}
     />
   );
 }
@@ -160,7 +146,6 @@ export default function App() {
   const [form, setForm] = useState<SellForm>(EMPTY_FORM);
   const [rateOpen, setRateOpen] = useState(false);
 
-  const [reportTarget, setReportTarget] = useState<ReportTarget | null>(null);
   const [handover, setHandover] = useState<{
     role: 'buyer' | 'seller'; saleId: string | null; code: string | null; codeLoading: boolean;
     stage: Record<'buyer' | 'seller', HandoverStage>; error: string | null;
@@ -175,8 +160,6 @@ export default function App() {
   const [preferencesError, setPreferencesError] = useState<string | null>(null);
   const [markingAllRead, setMarkingAllRead] = useState(false);
   const [savingPreferences, setSavingPreferences] = useState(false);
-  const [blocked, setBlocked] = useState<BlockedUser[]>(BLOCKED_USERS);
-  const [cases, setCases] = useState<ModerationCase[]>(MODERATION_CASES);
   const [reservations, setReservations] = useState<Record<string, SellerReservation>>(RESERVATIONS);
   const [alerts, setAlerts] = useState<AutoMatchAlert[]>([]);
   const [matchHits, setMatchHits] = useState<AutoMatchHit[]>([]);
@@ -189,12 +172,14 @@ export default function App() {
   const [reviewSubmitting, setReviewSubmitting] = useState(false);
   const [reviewError, setReviewError] = useState<string | null>(null);
   const [reviewSubmitted, setReviewSubmitted] = useState(false);
+  const [deletingAccount, setDeletingAccount] = useState(false);
+  const [deleteAccountError, setDeleteAccountError] = useState<string | null>(null);
+  const deleteAccountPending = useRef(false);
 
   const { toast, flash } = useToast();
   // Signed in: real rooms from chat-service, live over Socket.IO. Signed out: the demo threads above.
   const liveChat = useLiveChat(loggedIn, categories);
   const chatThreads = loggedIn ? liveChat.threads : threads;
-  const setChatThreads = loggedIn ? liveChat.setThreads : setThreads;
   const { filters, setFilters, results, counts, reset } = useCatalogFilters(listings, query);
 
   const categoryNameFor = (categoryId: string, availableCategories: ApiCategory[]) => (
@@ -399,6 +384,22 @@ export default function App() {
     setLoggedIn(false);
     navigate('/login');
     if (message) flash(message);
+  };
+
+  const handleDeleteAccount = async () => {
+    if (deleteAccountPending.current) return;
+    deleteAccountPending.current = true;
+    setDeletingAccount(true);
+    setDeleteAccountError(null);
+    try {
+      await deleteMyAccount();
+      logout('Account deleted.');
+    } catch (err) {
+      setDeleteAccountError('Could not delete account: ' + (err instanceof Error ? err.message : 'unknown error'));
+    } finally {
+      deleteAccountPending.current = false;
+      setDeletingAccount(false);
+    }
   };
 
   const openListing = (l: Listing | string) => {
@@ -700,7 +701,7 @@ export default function App() {
     } else {
       const id = Date.now();
       setThreads((ts) => [{
-        id, name: l.seller, faculty: l.faculty, online: true, presence: 'Online now', unread: 0, blocked: false,
+        id, name: l.seller, faculty: l.faculty, online: true, presence: 'Online now', unread: 0,
         listing: { id: l.id, title: l.title, price: l.price, status: l.status },
         messages: [{ id: 's0', from: 'system', text: 'Chat started from the listing page' }],
       }, ...ts]);
@@ -711,7 +712,7 @@ export default function App() {
 
   const sendMessage = (threadId: number | string, text: string) => {
     const t = chatThreads.find((x) => x.id === threadId);
-    if (!t || t.blocked) { flash('Message not sent — this conversation is blocked.'); return; }
+    if (!t) return;
     if (loggedIn && typeof threadId === 'string') {
       liveChat.send(threadId, text).then((ack) => { if (!ack.ok) flash('Message not sent: ' + ack.error); });
       return;
@@ -720,15 +721,6 @@ export default function App() {
       ? { ...x, messages: [...x.messages, { id: 'me' + Date.now(), from: 'me' as const, text, time: 'now', status: 'Sent' }] }
       : x)));
   };
-
-  const toggleBlock = (t: ChatThread) => {
-    const nowBlocked = !t.blocked;
-    setChatThreads((ts) => ts.map((x) => (x.id === t.id ? { ...x, blocked: nowBlocked } : x)));
-    setBlocked((b) => (nowBlocked ? [...b, { name: t.name, since: 'today' }] : b.filter((x) => x.name !== t.name)));
-    flash(nowBlocked ? t.name + ' blocked.' : t.name + ' unblocked.');
-  };
-
-  const openReport = (target: ReportTarget) => { setReportTarget(target); navigate('/report'); };
 
   const unread = notifications.filter((n) => !n.read).length;
   const openNotification = (n: NotificationItem) => {
@@ -751,6 +743,9 @@ export default function App() {
     id: o.id, title: o.title, price: o.price, seller: o.seller, when: o.placedAt, status: o.status, spot: o.spot,
     action: o.status === 'Completed' ? 'Rate seller' : o.status === 'Reserved' ? 'In progress' : 'Cancelled',
   }));
+  const activeSale = sales.find((item) => item.status === 'Reserved');
+  const openOrderRef = orders.find((item) => item.status === 'Reserved')?.reference
+    ?? (activeSale ? `ORD-${activeSale.id.slice(0, 8).toUpperCase()}` : null);
   const savedAll = listings.filter((l) => wishIds.includes(l.id));
 
   const buyerHandover: HandoverOrder | null = order ? {
@@ -770,17 +765,6 @@ export default function App() {
       seller: order.seller, when: order.status === 'Completed' ? 'Today' : order.window, status: order.status,
     }
     : null;
-
-  // Suspended is full-bleed (no TopNav/AppShell chrome) whether reached from the login gate
-  // or the logged-in demo shortcut, so it's checked before either branch.
-  if (location.pathname === '/suspended') {
-    return (
-      <>
-        <GlobalStyles />
-        <SuspendedScreen suspension={DEMO_SUSPENSION} onBack={() => logout()} />
-      </>
-    );
-  }
 
   if (!loggedIn) {
     return (
@@ -825,7 +809,6 @@ export default function App() {
       onWishlist={() => navigate('/wishlist')}
       onSell={() => navigate('/sell')}
       onChat={() => {}}
-      onReport={() => {}}
       onOpenListing={openListing}
     />
   );
@@ -875,7 +858,7 @@ export default function App() {
             <ListingRoute
               listings={listings} loaded={listingsLoaded} loadListing={(id) => fetchListing(id, categories)}
               wishIds={wishIds} wishlistMap={wishlistMap} onToggleWishlist={toggleWishlist} setSelectedId={setSelectedId}
-              placeOrder={placeOrder} openChat={openChat} openReport={openReport} setBlocked={setBlocked} flash={flash}
+              placeOrder={placeOrder} openChat={openChat}
             />
           )} />
 
@@ -950,7 +933,6 @@ export default function App() {
               onWishlist={() => navigate('/wishlist')}
               onSell={() => navigate('/sell')}
               onChat={(name) => { const l = listings.find((x) => x.seller === name); if (l) openChat(l); }}
-              onReport={(name) => openReport({ type: 'User', title: name, target: name })}
               onOpenListing={openListing}
             />
           )} />
@@ -974,9 +956,11 @@ export default function App() {
             <AccountScreen
               user={{ name: currentUser.name, memberType: currentUser.memberType, faculty: currentUser.faculty, email: getCurrentClaims()?.email ?? '' }}
               profile={profile} sessions={SESSIONS}
-              myReports={MY_REPORTS} blocked={blocked}
               listingSummary={`${mine.filter((l) => l.status === 'Available').length} active · ${mine.filter((l) => l.status === 'Reserved').length} reserved · ${mine.filter((l) => l.status === 'Sold').length} sold`}
-              openOrderRef={order && order.status === 'Reserved' ? order.reference : null}
+              openOrderRef={openOrderRef}
+              deletingAccount={deletingAccount}
+              deleteAccountError={deleteAccountError}
+              onClearDeleteAccountError={() => setDeleteAccountError(null)}
               onSaveProfile={async (p) => {
                 try {
                   setMe(await updateMyProfile({ contactInfo: p.contact }));
@@ -989,9 +973,8 @@ export default function App() {
               onChangePhoto={() => flash('Photo picker — replaces the directory photo.')}
               onLogout={() => logout('Signed out.')}
               onLogoutAll={() => logout('Signed out on all devices.')}
-              onUnblock={(name) => { setBlocked((b) => b.filter((x) => x.name !== name)); flash(name + ' unblocked.'); }}
               onMyListings={() => navigate('/mylistings')}
-              onDeleteAccount={() => logout('Account deletion requested.')}
+              onDeleteAccount={handleDeleteAccount}
             />
           )} />
 
@@ -1096,58 +1079,12 @@ export default function App() {
               onBack={() => (loggedIn ? liveChat.setActiveId(null) : setActiveThread(null))}
               onSend={(id, text) => sendMessage(id, text)}
               onAttachPhoto={() => flash('Photo picker — up to 4 images.')}
-              onToggleBlock={toggleBlock}
-              onReport={(t) => openReport({ type: 'User', title: t.name, target: t.name })}
               onOpenListing={(l: ChatThreadListing) => openListing(l.id)}
-            />
-          )} />
-
-          <Route path="/report" element={reportTarget ? (
-            <ReportScreen
-              target={{ ...reportTarget, orderRef: order?.reference }}
-              photos={[]}
-              onAddPhoto={() => flash('Photo picker — up to 4 images.')}
-              onSubmit={() => { flash('Report submitted — case created as Pending.'); navigate('/account'); }}
-              onCancel={() => navigate(-1)}
-            />
-          ) : <Navigate to="/account" replace />} />
-
-          <Route path="/moderation" element={(
-            <ModerationScreen
-              cases={cases} audit={AUDIT_LOG}
-              onStartReview={(id) => setCases((cs) => cs.map((c) => (c.id === id ? { ...c, state: 'In review' } : c)))}
-              onDismiss={(id) => setCases((cs) => cs.map((c) => (c.id === id ? { ...c, state: 'Dismissed', resolution: 'Dismissed — no policy violation found.' } : c)))}
-              onRemoveListing={(id) => { setCases((cs) => cs.map((c) => (c.id === id ? { ...c, state: 'Closed', resolution: 'Listing removed · seller notified.' } : c))); flash('Listing removed.'); }}
-              onSuspend={(id, { duration }) => {
-                setCases((cs) => cs.map((c) => (c.id === id ? { ...c, state: 'Closed', resolution: (duration === 'Permanent ban' ? 'Permanently banned' : 'Suspended ' + duration) + ' · sessions revoked.' } : c)));
-                flash('Action recorded.');
-              }}
-              onOpenEvidence={(c, e) => flash(e.k + ' for ' + c.id + ' opens read-only.')}
-            />
-          )} />
-
-          <Route path="/admin" element={(
-            <AdminCategoriesScreen
-              categories={categoryNames.map((c) => ({
-                id: c, name: c, slug: c.toLowerCase(), count: counts[c] || 0,
-              }))}
-              onNew={() => flash('New category — name, slug, parent.')}
-              onMerge={() => flash('Select two or more categories to merge.')}
-              onEdit={(c) => flash('Edit ' + c.name + ' — rename, re-slug, or merge.')}
             />
           )} />
 
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
-
-        <div style={{ padding: '0 24px 22px', display: 'flex', gap: 14, flexWrap: 'wrap', font: "500 11.5px/1.4 'Bai Jamjuree'", color: '#A8909B' }}>
-          {/* Demo-only shortcuts to screens that have no nav entry for a regular user. */}
-          <span>Demo:</span>
-          {[['moderation', 'Admin · moderation'], ['admin', 'Admin · categories'], ['account', 'Account'], ['mylistings', 'My listings']].map(([path, label]) => (
-            <span key={path} onClick={() => navigate('/' + path)} style={{ cursor: 'pointer', textDecoration: 'underline' }}>{label}</span>
-          ))}
-          <span onClick={() => navigate('/suspended')} style={{ cursor: 'pointer', textDecoration: 'underline' }}>Suspended login</span>
-        </div>
       </AppShell>
 
       <RateSellerDialog

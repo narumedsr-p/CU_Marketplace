@@ -13,14 +13,12 @@ interface ListingScreenProps {
   onToggleWishlist: () => void;
   wished: boolean;
   onViewSeller: () => void;
-  onReport: () => void;
-  onBlock: () => void;
 }
 
 // Listing detail. No view counter by design — wishlist count is the social proof.
 export default function ListingScreen({
   listing, onPlaceOrder, onChat, onToggleWishlist, wished,
-  onViewSeller, onReport, onBlock,
+  onViewSeller,
 }: ListingScreenProps) {
   const [photoIndex, setPhotoIndex] = useState(0);
   const available = listing.status === 'Available';
@@ -149,14 +147,6 @@ export default function ListingScreen({
             ♥ {wished ? 'Saved to wishlist' : 'Add to wishlist'}
           </Button>
 
-          <div style={{ display: 'flex', gap: 14, marginTop: 12 }}>
-            <div onClick={onReport} style={{ font: `500 12px/1 ${font}`, color: color.muted, cursor: 'pointer' }}>
-              Report listing
-            </div>
-            <div onClick={onBlock} style={{ font: `500 12px/1 ${font}`, color: color.muted, cursor: 'pointer' }}>
-              Block seller
-            </div>
-          </div>
         </div>
       </div>
     </div>

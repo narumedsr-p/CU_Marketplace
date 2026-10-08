@@ -3,45 +3,41 @@ import { color, font, labelStyle, card, pageTitle, pageSub, danger } from '../th
 import Field from '../components/Field';
 import Button from '../components/Button';
 import Avatar from '../components/Avatar';
-import Pill from '../components/Pill';
-import type { AccountProfile, AccountUser, BlockedUser, MyReportSummary, Session } from '../types';
+import type { AccountProfile, AccountUser, Session } from '../types';
 
 interface AccountScreenProps {
   user: AccountUser;
   profile?: AccountProfile;
   sessions?: Session[];
-  myReports?: MyReportSummary[];
-  blocked?: BlockedUser[];
   listingSummary?: string;
   openOrderRef?: string | null;
+  deletingAccount?: boolean;
+  deleteAccountError?: string | null;
+  onClearDeleteAccountError?: () => void;
   onSaveProfile: (profile: AccountProfile) => void;
   onChangePhoto: () => void;
   onLogout: () => void;
   onLogoutAll: () => void;
-  onUnblock: (name: string) => void;
   onMyListings?: () => void;
-  onDeleteAccount: () => void;
+  onDeleteAccount: () => Promise<void>;
 }
 
-// Account settings (FR 1.5–1.8, 7.2, 7.3).
+// Account settings (FR 1.5–1.8).
 export default function AccountScreen({
-  user, profile = { contact: '' }, sessions = [], myReports = [], blocked = [],
-  listingSummary, openOrderRef,
-  onSaveProfile, onChangePhoto, onLogout, onLogoutAll, onUnblock, onMyListings, onDeleteAccount,
+  user, profile = { contact: '' }, sessions = [],
+  listingSummary, openOrderRef, deletingAccount = false, deleteAccountError = null, onClearDeleteAccountError,
+  onSaveProfile, onChangePhoto, onLogout, onLogoutAll, onMyListings, onDeleteAccount,
 }: AccountScreenProps) {
   const [draft, setDraft] = useState(profile);
   const [delOpen, setDelOpen] = useState(false);
   const [confirmText, setConfirmText] = useState('');
   useEffect(() => setDraft(profile), [profile]);
-  const canDelete = confirmText === 'DELETE' && !openOrderRef;
-
-  const section = { ...card, overflow: 'hidden' as const };
-  const head = { ...labelStyle, padding: '13px 16px', borderBottom: '1px solid ' + color.lineSoft };
+  const canDelete = confirmText === 'DELETE' && !openOrderRef && !deletingAccount;
 
   return (
     <div style={{ padding: '22px 24px 40px' }}>
       <div style={pageTitle}>Account</div>
-      <div style={pageSub}>Your profile, reports you've filed, people you've blocked, and your session.</div>
+      <div style={pageSub}>Your profile and session settings.</div>
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(300px,1fr))', gap: 18, marginTop: 18, alignItems: 'start' }}>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
@@ -97,45 +93,13 @@ export default function AccountScreen({
             </div>
           )}
 
-          <div style={section}>
-            <div style={head}>My reports</div>
-            {myReports.map((r) => (
-              <div key={r.id} style={{ padding: '12px 16px', borderBottom: '1px solid ' + color.lineSoft }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                  <span style={{ font: '600 11px/1 ui-monospace,monospace', color: color.faint }}>{r.id}</span>
-                  <Pill value={r.state} style={{ marginLeft: 'auto' }} />
-                </div>
-                <div style={{ font: `600 13px/1.35 ${font}`, marginTop: 6 }}>{r.title}</div>
-                <div style={{ font: `500 12px/1.5 ${font}`, color: color.muted, marginTop: 2 }}>
-                  {r.reason} · {r.when}{r.resolution ? ' · ' + r.resolution : ''}
-                </div>
-              </div>
-            ))}
-            {!myReports.length && <div style={{ padding: 16, font: `400 13px/1.5 ${font}`, color: color.muted }}>You haven't reported anything.</div>}
-          </div>
-
-          <div style={section}>
-            <div style={head}>Blocked users</div>
-            {blocked.map((b) => (
-              <div key={b.name} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '12px 16px', borderBottom: '1px solid ' + color.lineSoft }}>
-                <Avatar name={b.name} size={32} muted />
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ font: `600 13px/1.3 ${font}` }}>{b.name}</div>
-                  <div style={{ font: `500 11.5px/1.4 ${font}`, color: color.faint }}>Blocked {b.since}</div>
-                </div>
-                <span onClick={() => onUnblock(b.name)} style={{ font: `600 12.5px/1 ${font}`, color: color.pink, cursor: 'pointer' }}>Unblock</span>
-              </div>
-            ))}
-            {!blocked.length && <div style={{ padding: 16, font: `400 13px/1.5 ${font}`, color: color.muted }}>You haven't blocked anyone.</div>}
-          </div>
-
           <div style={{ border: '1px solid ' + danger.line, borderRadius: 12, padding: '16px 18px' }}>
             <div style={{ ...labelStyle, color: danger.fg }}>Delete account</div>
             <div style={{ font: `400 13px/1.6 ${font}`, color: color.body, marginTop: 9, textWrap: 'pretty' }}>
-              Removes your profile, listings, chats and wishlist. Personal data is erased within 30 days under PDPA; completed-order records are kept anonymised.
+              Your account will be marked as deleted and you will be signed out. Listings, chats, wishlists, and order records are not removed by this action.
             </div>
             {!delOpen ? (
-              <Button size="sm" variant="ghost" onClick={() => setDelOpen(true)} style={{ marginTop: 12, color: danger.fg, borderColor: danger.line }}>Delete my account</Button>
+              <Button size="sm" variant="ghost" onClick={() => { onClearDeleteAccountError?.(); setDelOpen(true); }} style={{ marginTop: 12, color: danger.fg, borderColor: danger.line }}>Delete my account</Button>
             ) : (
               <div style={{ marginTop: 12 }}>
                 {openOrderRef && (
@@ -143,12 +107,17 @@ export default function AccountScreen({
                     You have an open order ({openOrderRef}). Complete or cancel it before deleting your account.
                   </div>
                 )}
-                <Field label="Type DELETE to confirm" value={confirmText} onChange={(e: ChangeEvent<HTMLInputElement>) => setConfirmText(e.target.value)} placeholder="DELETE" />
+                <Field label="Type DELETE to confirm" value={confirmText} disabled={deletingAccount} onChange={(e: ChangeEvent<HTMLInputElement>) => setConfirmText(e.target.value)} placeholder="DELETE" />
+                {deleteAccountError && (
+                  <div role="alert" style={{ marginTop: 10, font: `500 12.5px/1.5 ${font}`, color: danger.fg }}>
+                    {deleteAccountError}
+                  </div>
+                )}
                 <div style={{ display: 'flex', gap: 8, marginTop: 10 }}>
-                  <Button size="sm" variant="ghost" onClick={() => { setDelOpen(false); setConfirmText(''); }}>Cancel</Button>
-                  <Button size="sm" disabled={!canDelete} onClick={onDeleteAccount} style={{
+                  <Button size="sm" variant="ghost" disabled={deletingAccount} onClick={() => { setDelOpen(false); setConfirmText(''); onClearDeleteAccountError?.(); }}>Cancel</Button>
+                  <Button size="sm" disabled={!canDelete} onClick={() => { void onDeleteAccount(); }} style={{
                     flex: 1, background: canDelete ? danger.fg : '#E3CDD8', boxShadow: 'none',
-                  }}>Permanently delete</Button>
+                  }}>{deletingAccount ? 'Deleting…' : 'Confirm account deletion'}</Button>
                 </div>
               </div>
             )}

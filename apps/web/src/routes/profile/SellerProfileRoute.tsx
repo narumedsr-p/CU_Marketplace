@@ -6,17 +6,16 @@ import { memberSince, type ApiProfile } from '../../api/profiles';
 import type { Listing, Review, SellerStats } from '../../types';
 
 export interface SellerProfileRouteProps
-  extends Omit<ComponentProps<typeof ProfileScreen>, 'isSelf' | 'user' | 'stats' | 'listings' | 'reviews' | 'onChat' | 'onReport'> {
+  extends Omit<ComponentProps<typeof ProfileScreen>, 'isSelf' | 'user' | 'stats' | 'listings' | 'reviews' | 'onChat'> {
   listings: Listing[];
   loadProfile: (userId: string) => Promise<ApiProfile | null>;
   loadReviews: (userId: string) => Promise<Review[]>;
   loadRating: (userId: string) => Promise<SellerStats>;
   onChat: (sellerName: string) => void;
-  onReport: (sellerName: string) => void;
 }
 
 export default function SellerProfileRoute({
-  listings, loadProfile, loadReviews, loadRating, onChat, onReport, ...props
+  listings, loadProfile, loadReviews, loadRating, onChat, ...props
 }: SellerProfileRouteProps) {
   const { userId = '' } = useParams<{ userId: string }>();
   const [profile, setProfile] = useState<ApiProfile | null | undefined>(undefined);
@@ -61,7 +60,6 @@ export default function SellerProfileRoute({
       listings={sellerListings}
       reviews={reviews}
       onChat={() => onChat(profile.displayName)}
-      onReport={() => onReport(profile.displayName)}
     />
   );
 }
