@@ -3,6 +3,7 @@ import { join } from 'path';
 import cookieParser from 'cookie-parser';
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
+import { mountChatSocketProxy } from './proxy/chat-socket.proxy';
 
 // Shared secrets (e.g. INTERNAL_SERVICE_SECRET) live in the repo-root .env so they aren't
 // duplicated per service; this service's own .env still supplies its local overrides.
@@ -12,6 +13,7 @@ config();
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
   app.use(cookieParser());
+  mountChatSocketProxy(app);
 
   // dynamic import: @scalar/nestjs-api-reference's CJS build require()s an
   // ESM-only dependency, which only resolves correctly through import().

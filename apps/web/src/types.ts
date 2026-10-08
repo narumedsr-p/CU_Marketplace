@@ -248,7 +248,8 @@ export interface ChatThreadListing {
 }
 
 export interface ChatThread {
-  id: number;
+  // number for the offline demo threads, chat-service room id (uuid) for real rooms
+  id: number | string;
   name: string;
   faculty?: string;
   online?: boolean;

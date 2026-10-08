@@ -5,6 +5,7 @@ import { ChatController } from './chat.controller';
 import { ChatService } from './chat.service';
 import { NotificationClient } from '../clients/notification.client';
 import { getRabbitMqUrl, QUEUES } from '@workspace/contracts';
+import { ChatGateway } from './chat.gateway';
 import { ChatRoom, ChatRoomSchema } from './schemas/chat-room.schema';
 import { ChatMessage, ChatMessageSchema } from './schemas/chat-message.schema';
 
@@ -27,6 +28,6 @@ import { ChatMessage, ChatMessageSchema } from './schemas/chat-message.schema';
     ]),
   ],
   controllers: [ChatController],
-  providers: [ChatService, NotificationClient],
+  providers: [ChatService, NotificationClient, ChatGateway],
 })
 export class ChatModule {}

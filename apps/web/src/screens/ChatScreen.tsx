@@ -8,15 +8,15 @@ import type { ChatThread, ChatThreadListing } from '../types';
 
 interface ChatScreenProps {
   threads?: ChatThread[];
-  activeId?: number | null;
-  typingId?: number | null;
+  activeId?: number | string | null;
+  typingId?: number | string | null;
   compact?: boolean;
   height?: number;
   quickReplies?: string[];
-  onSelectThread: (id: number) => void;
+  onSelectThread: (id: number | string) => void;
   onBack: () => void;
-  onSend: (threadId: number, text: string) => void;
-  onAttachPhoto: (threadId: number) => void;
+  onSend: (threadId: number | string, text: string) => void;
+  onAttachPhoto: (threadId: number | string) => void;
   onToggleBlock: (thread: ChatThread) => void;
   onReport: (thread: ChatThread) => void;
   onOpenListing: (listing: ChatThreadListing) => void;
