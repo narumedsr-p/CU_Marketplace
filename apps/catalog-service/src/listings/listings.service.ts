@@ -100,7 +100,7 @@ export class ListingsService {
   async create(data: any) {
     validateItemMetadata(data);
     const item = await this.prisma.item.create({ data });
-    this.wishlistClient.evaluateItem(item);
+    await this.wishlistClient.evaluateItem(item);
     return item;
   }
 
