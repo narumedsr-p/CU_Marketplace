@@ -35,7 +35,7 @@ async function toThread(room: ApiChatRoom, me: string | null, categories: ApiCat
     unread: 0,
     listing: listing
       ? { id: listing.id, title: listing.title, price: listing.price, status: listing.status, photo: listing.photos?.[0] }
-      : { id: room.itemId, title: 'Listing', price: 0, status: 'Available' },
+      : { id: room.itemId, title: 'Listing details unavailable', price: 0, status: 'Empty' },
     messages: lastMessageOf(room).map((m) => toMessage(m, me)),
   };
 }

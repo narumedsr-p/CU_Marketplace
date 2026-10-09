@@ -180,6 +180,7 @@ export interface ChatMessage {
 
 export interface ChatThreadListing {
   id: string;
+  orderId?: string;
   title: string;
   price: number;
   status: ListingStatus;

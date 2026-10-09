@@ -9,6 +9,8 @@ import type { Listing } from '../types';
 interface ListingScreenProps {
   listing: Listing;
   isOwner: boolean;
+  isMyReservation: boolean;
+  onViewMyOrder: () => void;
   onManage: () => void;
   onDelete: () => Promise<boolean>;
   onCancelReservation: () => Promise<boolean>;
@@ -21,7 +23,7 @@ interface ListingScreenProps {
 
 // Listing detail. No view counter by design — wishlist count is the social proof.
 export default function ListingScreen({
-  listing, isOwner, onManage, onDelete, onCancelReservation,
+  listing, isOwner, isMyReservation, onViewMyOrder, onManage, onDelete, onCancelReservation,
   onPlaceOrder, onChat, onToggleWishlist, wished,
   onViewSeller,
 }: ListingScreenProps) {
@@ -29,6 +31,11 @@ export default function ListingScreen({
   const [confirmAction, setConfirmAction] = useState<'delete' | 'cancel' | null>(null);
   const [actionPending, setActionPending] = useState(false);
   const available = listing.status === 'Available';
+  const canOpenOrder = listing.status === 'Reserved' && isMyReservation;
+  const orderButtonLabel = available ? 'Place order'
+    : canOpenOrder ? 'Reserved by you · View order'
+      : listing.status === 'Reserved' ? 'Reserved'
+        : listing.status === 'Sold' ? 'Sold' : 'Unavailable';
 
   const confirmOwnerAction = async () => {
     if (!confirmAction || actionPending) return;
@@ -149,7 +156,9 @@ export default function ListingScreen({
             <div style={{ ...labelStyle, color: '#A81756' }}>Handover spot</div>
             <div style={{ font: `500 13.5px/1.4 ${font}`, marginTop: 7 }}>{listing.spot}</div>
             <div style={{ font: `400 12.5px/1.5 ${font}`, color: color.muted, marginTop: 4 }}>
-              {isOwner ? 'Confirm the pickup window with the buyer in chat.' : 'Pickup window is confirmed in chat after you order.'}
+              {isOwner ? 'Confirm the pickup window with the buyer in chat.'
+                : canOpenOrder ? 'Confirm your pickup window with the seller in chat.'
+                  : 'Pickup window is confirmed in chat after you order.'}
             </div>
           </div>
 
@@ -181,8 +190,8 @@ export default function ListingScreen({
           ) : (
             <>
               <div style={{ display: 'flex', gap: 10, marginTop: 16 }}>
-                <Button onClick={onPlaceOrder} disabled={!available} style={{ flex: 1, opacity: available ? 1 : .55 }}>
-                  {available ? 'Place order' : 'Reserved by someone else'}
+                <Button onClick={canOpenOrder ? onViewMyOrder : onPlaceOrder} disabled={!available && !canOpenOrder} style={{ flex: 1, opacity: available || canOpenOrder ? 1 : .55 }}>
+                  {orderButtonLabel}
                 </Button>
                 <Button variant="outline" onClick={onChat}>Chat</Button>
               </div>

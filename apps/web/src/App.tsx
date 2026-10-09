@@ -73,6 +73,7 @@ const NOTIFICATION_PREFS: NotificationPrefDef[] = [
 
 interface ListingRouteProps {
   listings: Listing[];
+  orders: Order[];
   loaded: boolean;
   loadListing: (id: string) => Promise<Listing | null>;
   onDeleteListing: (id: string) => Promise<boolean>;
@@ -88,7 +89,7 @@ interface ListingRouteProps {
 // Reads :id from the URL and keeps `selectedId` in sync so a direct link / refresh / back
 // button resolves to the right listing.
 function ListingRoute({
-  listings, loaded, loadListing, onDeleteListing, onCancelReservation,
+  listings, orders, loaded, loadListing, onDeleteListing, onCancelReservation,
   wishIds, wishlistMap, onToggleWishlist, setSelectedId, placeOrder, openChat,
 }: ListingRouteProps) {
   const { id = '' } = useParams<{ id: string }>();
@@ -107,11 +108,14 @@ function ListingRoute({
   if (!listing) {
     return loaded && fetched === null ? <Navigate to="/" replace /> : null;
   }
+  const myReservation = orders.find((order) => order.listingId === listing.id && order.status === 'Reserved');
   return (
     <ListingScreen
       key={`${listing.id}:${listing.status}`}
       listing={listing}
       isOwner={!!listing.sellerId && listing.sellerId === getCurrentUserId()}
+      isMyReservation={listing.status === 'Reserved' && !!myReservation}
+      onViewMyOrder={() => { if (myReservation) navigate(`/orders/${myReservation.id}`); }}
       onManage={() => navigate('/mylistings')}
       onDelete={async () => {
         const deleted = await onDeleteListing(listing.id);
@@ -191,7 +195,26 @@ export default function App() {
   const { toast, flash } = useToast();
   // Signed in: real rooms from chat-service, live over Socket.IO. Signed out: the demo threads above.
   const liveChat = useLiveChat(loggedIn, categories);
-  const chatThreads = loggedIn ? liveChat.threads : threads;
+  const chatThreads = loggedIn ? liveChat.threads.map((thread) => {
+    const itemId = thread.listing.id;
+    const currentListing = listings.find((item) => item.id === itemId);
+    const activeTransaction = orders.find((order) => order.listingId === itemId && order.status === 'Reserved')
+      ?? sales.find((sale) => sale.listingId === itemId && sale.status === 'Reserved');
+    const history = orders.find((order) => order.listingId === itemId)
+      ?? sales.find((sale) => sale.listingId === itemId);
+    const source = activeTransaction ?? currentListing ?? history;
+    if (!source) return thread;
+    return {
+      ...thread,
+      listing: {
+        ...thread.listing,
+        orderId: currentListing ? undefined : (activeTransaction ?? history)?.id,
+        title: source.title,
+        price: source.price,
+        status: source.status === 'Completed' ? 'Sold' as const : source.status,
+      },
+    };
+  }) : threads;
   const requestedRoomId = location.pathname === '/chat' ? new URLSearchParams(location.search).get('roomId') : null;
   useEffect(() => {
     if (loggedIn && requestedRoomId && liveChat.activeId !== requestedRoomId && liveChat.threads.some((t) => t.id === requestedRoomId)) {
@@ -924,7 +947,7 @@ export default function App() {
 
           <Route path="/listing/:id" element={(
             <ListingRoute
-              listings={listings} loaded={listingsLoaded} loadListing={(id) => fetchListing(id, categories)}
+              listings={listings} orders={orders} loaded={listingsLoaded} loadListing={(id) => fetchListing(id, categories)}
               onDeleteListing={removeListing} onCancelReservation={cancelSellerReservation}
               wishIds={wishIds} wishlistMap={wishlistMap} onToggleWishlist={toggleWishlist} setSelectedId={setSelectedId}
               placeOrder={placeOrder} openChat={openChat}
@@ -1163,7 +1186,10 @@ export default function App() {
               }}
               onSend={(id, text) => sendMessage(id, text)}
               onAttachPhoto={() => flash('Photo picker — up to 4 images.')}
-              onOpenListing={(l: ChatThreadListing) => openListing(l.id)}
+              onOpenListing={(l: ChatThreadListing) => {
+                if (l.orderId) navigate(`/orders/${l.orderId}`);
+                else openListing(l.id);
+              }}
             />
           )} />
 

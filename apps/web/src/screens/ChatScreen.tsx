@@ -92,7 +92,7 @@ export default function ChatScreen({
                       </div>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 5 }}>
                         <div style={{ flex: 1, minWidth: 0, font: `500 11.5px/1.3 ${font}`, color: color.faint, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                          {t.listing.title} · {baht(t.listing.price)}
+                          {t.listing.title}{t.listing.price > 0 ? ` · ${baht(t.listing.price)}` : ''}
                         </div>
                         {t.unread > 0 && (
                           <div style={{ minWidth: 18, padding: '2px 5px', borderRadius: 9, background: color.pink, color: color.white, font: `700 10.5px/1.3 ${font}`, textAlign: 'center' }}>{t.unread}</div>
@@ -121,19 +121,23 @@ export default function ChatScreen({
               </div>
             </div>
 
-            <div onClick={() => onOpenListing(cur.listing)} style={{
-              display: 'flex', alignItems: 'center', gap: 11, padding: '10px 16px', cursor: 'pointer',
+            <div onClick={() => { if (cur.listing.status !== 'Empty') onOpenListing(cur.listing); }} style={{
+              display: 'flex', alignItems: 'center', gap: 11, padding: '10px 16px', cursor: cur.listing.status === 'Empty' ? 'default' : 'pointer',
               background: color.pinkTint, borderBottom: '1px solid ' + color.pinkLine,
             }}>
               <PhotoSlot src={cur.listing.photo} label="" radius={7} style={{ width: 40, flex: 'none' }} />
               <div style={{ flex: 1, minWidth: 0 }}>
                 <div style={{ font: `600 13px/1.3 ${font}`, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{cur.listing.title}</div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 4 }}>
-                  <span style={{ font: `700 13.5px/1 ${font}`, color: color.pink }}>{baht(cur.listing.price)}</span>
-                  <StatusBadge status={cur.listing.status} style={{ fontSize: 10.5, padding: '2px 7px' }} />
-                </div>
+                {cur.listing.status !== 'Empty' && (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 4 }}>
+                    <span style={{ font: `700 13.5px/1 ${font}`, color: color.pink }}>{baht(cur.listing.price)}</span>
+                    <StatusBadge status={cur.listing.status} style={{ fontSize: 10.5, padding: '2px 7px' }} />
+                  </div>
+                )}
               </div>
-              <div style={{ font: `600 12px/1 ${font}`, color: color.pink, flex: 'none' }}>View listing ›</div>
+              {cur.listing.status !== 'Empty' && <div style={{ font: `600 12px/1 ${font}`, color: color.pink, flex: 'none' }}>
+                {cur.listing.orderId ? 'View order ›' : 'View listing ›'}
+              </div>}
             </div>
 
             <div ref={scroller} style={{ flex: 1, minHeight: 0, overflowY: 'auto', padding: 16, display: 'flex', flexDirection: 'column', gap: 10, background: '#FCF8FA' }}>
