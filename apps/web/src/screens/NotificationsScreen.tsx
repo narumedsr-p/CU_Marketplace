@@ -9,6 +9,7 @@ const KIND: Record<NotificationKind, { bg: string; fg: string; glyph: string }> 
   price: { bg: color.pinkLine, fg: color.pink, glyph: '฿' },
   order: { bg: '#FFF3E0', fg: '#9A5B00', glyph: 'O' },
   chat: { bg: color.ink, fg: color.white, glyph: 'C' },
+  review: { bg: '#FFF3E0', fg: '#9A5B00', glyph: '★' },
   account: { bg: '#F2ECEF', fg: color.body, glyph: '!' },
 };
 
@@ -17,16 +18,22 @@ interface NotificationsScreenProps {
   prefs?: NotificationPrefsState;
   prefItems?: NotificationPrefDef[];
   categories?: string[];
+  loading?: boolean;
+  error?: string | null;
+  markingAllRead?: boolean;
+  savingPreferences?: boolean;
   onOpen: (notification: NotificationItem) => void;
-  onMarkAllRead: () => void;
-  onTogglePref: (key: string) => void;
+  onRetry: () => Promise<void>;
+  onMarkAllRead: () => Promise<void>;
+  onTogglePref: (key: string) => Promise<void>;
 }
 
 // Notification Center (FR 6.1–6.4).
 export default function NotificationsScreen({
   notifications = [], prefs = {}, prefItems = [],
-  categories = ['All', 'Auto-match', 'Orders', 'Chat', 'Account'],
-  onOpen, onMarkAllRead, onTogglePref,
+  categories = ['All', 'Auto-match', 'Orders', 'Chat', 'Reviews', 'Account'],
+  loading = false, error = null, markingAllRead = false, savingPreferences = false,
+  onOpen, onRetry, onMarkAllRead, onTogglePref,
 }: NotificationsScreenProps) {
   const [filter, setFilter] = useState('All');
   const shown = notifications.filter((n) => filter === 'All' || n.category === filter);
@@ -34,6 +41,14 @@ export default function NotificationsScreen({
   const groups = ([['today', 'Today'], ['earlier', 'Earlier']] as const)
     .map(([k, label]) => [label, shown.filter((n) => (n.group || 'earlier') === k)] as const)
     .filter(([, list]) => list.length);
+
+  const markAllRead = async () => {
+    try { await onMarkAllRead(); } catch { /* Parent displays the error. */ }
+  };
+
+  const togglePreference = async (key: string) => {
+    try { await onTogglePref(key); } catch { /* Parent displays the error. */ }
+  };
 
   return (
     <div style={{ padding: '22px 24px 40px', display: 'flex', gap: 22, flexWrap: 'wrap', alignItems: 'flex-start' }}>
@@ -43,8 +58,17 @@ export default function NotificationsScreen({
             <div style={pageTitle}>Notifications</div>
             <div style={pageSub}>{unread ? unread + ' unread · orders, chat and auto-match in one place' : 'You’re all caught up.'}</div>
           </div>
-          <span onClick={onMarkAllRead} style={{ font: `600 12.5px/1 ${font}`, color: color.pink, cursor: 'pointer', padding: '6px 0' }}>Mark all as read</span>
+          <span onClick={() => { void markAllRead(); }} style={{ font: `600 12.5px/1 ${font}`, color: color.pink, cursor: markingAllRead || !unread ? 'default' : 'pointer', padding: '6px 0', opacity: markingAllRead || !unread ? .55 : 1 }}>
+            {markingAllRead ? 'Marking…' : 'Mark all as read'}
+          </span>
         </div>
+
+        {error && (
+          <div style={{ marginTop: 14, padding: '11px 13px', borderRadius: 10, background: '#FFF3E0', color: '#9A5B00', font: `500 12.5px/1.5 ${font}`, display: 'flex', gap: 10, alignItems: 'center' }}>
+            <span style={{ flex: 1 }}>{error}</span>
+            <span onClick={() => { void onRetry().catch(() => {}); }} style={{ color: color.pink, cursor: loading ? 'default' : 'pointer', fontWeight: 700 }}>{loading ? 'Loading…' : 'Try again'}</span>
+          </div>
+        )}
 
         <div style={{ display: 'flex', gap: 7, flexWrap: 'wrap', marginTop: 14 }}>
           {categories.map((c) => (
@@ -61,7 +85,7 @@ export default function NotificationsScreen({
               {list.map((n) => {
                 const k = KIND[n.kind] || KIND.account;
                 return (
-                  <div key={n.id} onClick={() => onOpen(n)} style={{
+                  <div key={n.id} onClick={() => { void onOpen(n); }} style={{
                     display: 'flex', gap: 12, padding: '14px 16px', alignItems: 'flex-start', cursor: 'pointer',
                     background: n.read ? color.white : '#FFF8FB', borderBottom: '1px solid ' + color.lineSoft,
                   }}>
@@ -86,7 +110,9 @@ export default function NotificationsScreen({
               })}
             </div>
           ))}
-          {!shown.length && (
+          {loading && !shown.length ? (
+            <div style={{ padding: '40px 16px', textAlign: 'center', font: `400 13.5px/1.6 ${font}`, color: color.muted }}>Loading notifications…</div>
+          ) : !shown.length && (
             <div style={{ padding: '40px 16px', textAlign: 'center', font: `400 13.5px/1.6 ${font}`, color: color.muted }}>No notifications in this category.</div>
           )}
         </div>
@@ -98,7 +124,7 @@ export default function NotificationsScreen({
           {prefItems.map((p) => (
             <div key={p.key} style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
               <div style={{ flex: 1, font: `500 13px/1.4 ${font}`, color: color.body }}>{p.name}</div>
-              <Toggle checked={!!prefs[p.key]} onChange={() => onTogglePref(p.key)} />
+              <Toggle checked={!!prefs[p.key]} onChange={() => { if (!savingPreferences) void togglePreference(p.key); }} style={{ opacity: savingPreferences ? .55 : 1 }} />
             </div>
           ))}
         </div>

@@ -3,11 +3,12 @@ import { fetchListing, type ApiCategory } from './catalog';
 import { fetchProfile } from './profiles';
 import type { Listing, Order, Sale } from '../types';
 
-interface ApiOrder {
+export interface ApiOrder {
   id: string;
   buyerId: string;
   sellerId: string;
   itemId: string;
+  itemTitle: string | null;
   agreedPrice: string;
   status: 'Pending' | 'Completed' | 'Cancelled';
   createdAt: string;
@@ -26,14 +27,15 @@ function toOrderStatus(status: ApiOrder['status']): Order['status'] {
   return status === 'Pending' ? 'Reserved' : status;
 }
 
-function toOrder(order: ApiOrder, listing: Listing | null): Order {
+export function toOrder(order: ApiOrder, listing: Listing | null): Order {
   const shortCode = order.id.slice(0, 8).toUpperCase();
   return {
     id: order.id,
     reference: `ORD-${shortCode}`,
     handoverCode: shortCode,
     listingId: order.itemId,
-    title: listing?.title ?? 'Unavailable item',
+    sellerId: order.sellerId,
+    title: order.itemTitle ?? listing?.title ?? 'Unavailable item',
     price: Number(order.agreedPrice),
     seller: listing?.seller ?? 'CU member',
     faculty: listing?.faculty ?? '',
@@ -58,6 +60,10 @@ export async function fetchMyOrders(categories: ApiCategory[]) {
   const orders = await api<ApiOrder[]>(`${ORDERS}?role=buyer`);
   const sorted = [...orders].sort((a, b) => b.createdAt.localeCompare(a.createdAt));
   return withListings(sorted, categories);
+}
+
+export function fetchOrderDetail(orderId: string) {
+  return api<ApiOrder>(`${ORDERS}/${encodeURIComponent(orderId)}`);
 }
 
 export async function getPurchasesItem(categories: ApiCategory[]): Promise<Sale[]> {

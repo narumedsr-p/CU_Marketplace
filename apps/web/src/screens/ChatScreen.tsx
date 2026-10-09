@@ -13,27 +13,26 @@ interface ChatScreenProps {
   compact?: boolean;
   height?: number;
   quickReplies?: string[];
+  emptyMessage?: string;
   onSelectThread: (id: number | string) => void;
   onBack: () => void;
   onSend: (threadId: number | string, text: string) => void;
   onAttachPhoto: (threadId: number | string) => void;
-  onToggleBlock: (thread: ChatThread) => void;
-  onReport: (thread: ChatThread) => void;
   onOpenListing: (listing: ChatThreadListing) => void;
 }
 
 // Real-time chat (FR 3.1–3.5, UC-03). Presentational — plug your WebSocket client into the
 // callbacks and push incoming messages into `threads`.
 export default function ChatScreen({
-  threads = [], activeId, typingId, compact = false, height,
+  threads = [], activeId, typingId, compact = false, height, emptyMessage,
   quickReplies = ['Is it still available?', 'Can we meet at the handover spot?', 'What time works for you?'],
-  onSelectThread, onBack, onSend, onAttachPhoto, onToggleBlock, onReport, onOpenListing,
+  onSelectThread, onBack, onSend, onAttachPhoto, onOpenListing,
 }: ChatScreenProps) {
   const resolvedHeight = height ?? (compact ? 640 : 620);
   const [q, setQ] = useState('');
   const [draft, setDraft] = useState('');
   const scroller = useRef<HTMLDivElement>(null);
-  const cur = threads.find((t) => t.id === activeId) || (compact ? null : threads[0]);
+  const cur = threads.find((t) => t.id === activeId) || (compact || activeId != null ? null : threads[0]);
   const msgCount = cur ? cur.messages.length : 0;
 
   useEffect(() => {
@@ -89,11 +88,11 @@ export default function ChatScreen({
                         font: `400 12.5px/1.4 ${font}`, color: t.unread ? color.ink : color.muted, marginTop: 3,
                         whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
                       }}>
-                        {t.blocked ? 'Blocked' : (last?.from === 'me' ? 'You: ' : '') + (last?.image ? 'Photo' : last?.text || '')}
+                        {(last?.from === 'me' ? 'You: ' : '') + (last?.image ? 'Photo' : last?.text || '')}
                       </div>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 5 }}>
                         <div style={{ flex: 1, minWidth: 0, font: `500 11.5px/1.3 ${font}`, color: color.faint, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                          {t.listing.title} · {baht(t.listing.price)}
+                          {t.listing.title}{t.listing.price > 0 ? ` · ${baht(t.listing.price)}` : ''}
                         </div>
                         {t.unread > 0 && (
                           <div style={{ minWidth: 18, padding: '2px 5px', borderRadius: 9, background: color.pink, color: color.white, font: `700 10.5px/1.3 ${font}`, textAlign: 'center' }}>{t.unread}</div>
@@ -116,27 +115,29 @@ export default function ChatScreen({
               <Avatar name={cur.name} size={38} />
               <div style={{ flex: 1, minWidth: 0 }}>
                 <div style={{ font: `600 14.5px/1.3 ${font}`, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{cur.name}</div>
-                <div style={{ font: `500 12px/1.3 ${font}`, color: cur.online && !cur.blocked ? '#1E7A44' : color.faint, marginTop: 2 }}>
-                  {cur.blocked ? 'Blocked' : cur.presence || (cur.online ? 'Online now' : 'Offline')}{cur.faculty ? ' · ' + cur.faculty : ''}
+                <div style={{ font: `500 12px/1.3 ${font}`, color: cur.online ? '#1E7A44' : color.faint, marginTop: 2 }}>
+                  {cur.presence || (cur.online ? 'Online now' : 'Offline')}{cur.faculty ? ' · ' + cur.faculty : ''}
                 </div>
               </div>
-              <span onClick={() => onReport(cur)} style={{ font: `600 12px/1 ${font}`, color: color.muted, cursor: 'pointer' }}>Report</span>
-              <span onClick={() => onToggleBlock(cur)} style={{ font: `600 12px/1 ${font}`, color: color.muted, cursor: 'pointer' }}>{cur.blocked ? 'Unblock' : 'Block'}</span>
             </div>
 
-            <div onClick={() => onOpenListing(cur.listing)} style={{
-              display: 'flex', alignItems: 'center', gap: 11, padding: '10px 16px', cursor: 'pointer',
+            <div onClick={() => { if (cur.listing.status !== 'Empty') onOpenListing(cur.listing); }} style={{
+              display: 'flex', alignItems: 'center', gap: 11, padding: '10px 16px', cursor: cur.listing.status === 'Empty' ? 'default' : 'pointer',
               background: color.pinkTint, borderBottom: '1px solid ' + color.pinkLine,
             }}>
               <PhotoSlot src={cur.listing.photo} label="" radius={7} style={{ width: 40, flex: 'none' }} />
               <div style={{ flex: 1, minWidth: 0 }}>
                 <div style={{ font: `600 13px/1.3 ${font}`, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{cur.listing.title}</div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 4 }}>
-                  <span style={{ font: `700 13.5px/1 ${font}`, color: color.pink }}>{baht(cur.listing.price)}</span>
-                  <StatusBadge status={cur.listing.status} style={{ fontSize: 10.5, padding: '2px 7px' }} />
-                </div>
+                {cur.listing.status !== 'Empty' && (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 4 }}>
+                    <span style={{ font: `700 13.5px/1 ${font}`, color: color.pink }}>{baht(cur.listing.price)}</span>
+                    <StatusBadge status={cur.listing.status} style={{ fontSize: 10.5, padding: '2px 7px' }} />
+                  </div>
+                )}
               </div>
-              <div style={{ font: `600 12px/1 ${font}`, color: color.pink, flex: 'none' }}>View listing ›</div>
+              {cur.listing.status !== 'Empty' && <div style={{ font: `600 12px/1 ${font}`, color: color.pink, flex: 'none' }}>
+                {cur.listing.orderId ? 'View order ›' : 'View listing ›'}
+              </div>}
             </div>
 
             <div ref={scroller} style={{ flex: 1, minHeight: 0, overflowY: 'auto', padding: 16, display: 'flex', flexDirection: 'column', gap: 10, background: '#FCF8FA' }}>
@@ -167,20 +168,14 @@ export default function ChatScreen({
                   </div>
                 );
               })}
-              {typingId === cur.id && !cur.blocked && (
+              {typingId === cur.id && (
                 <div style={{ flex: 'none', alignSelf: 'flex-start', padding: '9px 14px', borderRadius: '14px 14px 14px 4px', background: color.white, border: '1px solid ' + color.line, font: `500 12.5px/1.4 ${font}`, color: color.faint }}>
                   {shortName(cur.name)} is typing…
                 </div>
               )}
             </div>
 
-            {cur.blocked ? (
-              <div style={{ padding: 16, borderTop: '1px solid ' + color.line, font: `500 13px/1.5 ${font}`, color: color.muted, textAlign: 'center' }}>
-                You blocked this user. Messages can't be sent or received.{' '}
-                <span onClick={() => onToggleBlock(cur)} style={{ color: color.pink, fontWeight: 600, cursor: 'pointer' }}>Unblock</span>
-              </div>
-            ) : (
-              <div style={{ borderTop: '1px solid ' + color.line, padding: '10px 12px 12px' }}>
+            <div style={{ borderTop: '1px solid ' + color.line, padding: '10px 12px 12px' }}>
                 <div style={{ display: 'flex', gap: 6, overflowX: 'auto', paddingBottom: 9 }}>
                   {quickReplies.map((r) => (
                     <div key={r} onClick={() => send(r)} style={{
@@ -206,8 +201,12 @@ export default function ChatScreen({
                 <div style={{ font: `400 11px/1.5 ${font}`, color: color.faint, marginTop: 8 }}>
                   Meet at a public campus spot. Never pay before the QR handover.
                 </div>
-              </div>
-            )}
+            </div>
+          </div>
+        )}
+        {!compact && !showConvo && (
+          <div style={{ display: 'grid', placeItems: 'center', padding: 24, font: `500 13px/1.5 ${font}`, color: color.muted, textAlign: 'center' }}>
+            {emptyMessage ?? 'Select a conversation.'}
           </div>
         )}
       </div>

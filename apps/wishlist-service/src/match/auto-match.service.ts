@@ -160,32 +160,41 @@ export class AutoMatchService {
     let matchedCount = 0;
 
     for (const candidate of candidates) {
-      const existingRecord = await this.prisma.matchRecord.findFirst({
+      let record = await this.prisma.matchRecord.findFirst({
         where: { ruleId: candidate.id, matchedItemId: item.id },
       });
 
-      if (!existingRecord) {
-        await this.prisma.matchRecord.create({
+      if (!record) {
+        record = await this.prisma.matchRecord.create({
           data: {
             ruleId: candidate.id,
             matchedItemId: item.id,
             matchScore: candidate.matchScore,
-            isNotified: true,
+            isNotified: false,
           },
         });
         matchedCount++;
+      }
 
+      if (!record.isNotified) {
         try {
           await this.notificationClient.send({
             userId: candidate.userId,
             title: 'Auto-Match Alert',
             message: `A new item matching "${candidate.keyword}" was listed: "${item.title}"`,
+            kind: 'match',
+            action: { type: 'listing', listingId: item.id },
+          });
+          await this.prisma.matchRecord.update({
+            where: { id: record.id },
+            data: { isNotified: true },
           });
         } catch (err) {
           this.logger.error(
             `Failed to send auto-match notification to user ${candidate.userId}`,
             err,
           );
+          throw err;
         }
       }
     }

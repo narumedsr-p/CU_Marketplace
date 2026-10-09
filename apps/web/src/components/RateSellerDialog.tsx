@@ -6,14 +6,20 @@ import Button from './Button';
 interface RateSellerDialogProps {
   open: boolean;
   onClose: () => void;
-  onSubmit: (result: { stars: number; text: string }) => void;
+  onSubmit: (result: { stars: number; text: string }) => Promise<void>;
+  submitting?: boolean;
+  error?: string | null;
 }
 
-export default function RateSellerDialog({ open, onClose, onSubmit }: RateSellerDialogProps) {
+export default function RateSellerDialog({ open, onClose, onSubmit, submitting = false, error = null }: RateSellerDialogProps) {
   const [stars, setStars] = useState(5);
   const [text, setText] = useState('');
   const [focus, setFocus] = useState(false);
   if (!open) return null;
+  const submit = async () => {
+    if (submitting) return;
+    try { await onSubmit({ stars, text: text.trim() }); } catch { /* Error is rendered below. */ }
+  };
 
   return (
     <div
@@ -46,9 +52,10 @@ export default function RateSellerDialog({ open, onClose, onSubmit }: RateSeller
         />
 
         <div style={{ display: 'flex', gap: 9, marginTop: 16 }}>
-          <Button variant="ghost" onClick={onClose}>Later</Button>
-          <Button full onClick={() => onSubmit({ stars, text })}>Submit rating</Button>
+          <Button variant="ghost" onClick={onClose} disabled={submitting}>Later</Button>
+          <Button full onClick={() => { void submit(); }} disabled={submitting}>{submitting ? 'Submitting…' : 'Submit rating'}</Button>
         </div>
+        {error && <div style={{ marginTop: 10, font: `500 12px/1.45 ${font}`, color: '#B42318' }}>{error}</div>}
       </div>
     </div>
   );

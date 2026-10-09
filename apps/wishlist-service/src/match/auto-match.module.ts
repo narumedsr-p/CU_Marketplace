@@ -8,15 +8,17 @@ import { getRabbitMqUrl, QUEUES } from '@workspace/contracts';
 
 @Module({
   imports: [
-    ClientsModule.register([
+    ClientsModule.registerAsync([
       {
         name: 'NOTIFICATION_PACKAGE',
-        transport: Transport.RMQ,
-        options: {
-          urls: [getRabbitMqUrl()],
-          queue: QUEUES.notification,
-          queueOptions: { durable: true },
-        },
+        useFactory: () => ({
+          transport: Transport.RMQ,
+          options: {
+            urls: [getRabbitMqUrl()],
+            queue: QUEUES.notification,
+            queueOptions: { durable: true },
+          },
+        }),
       },
     ]),
   ],

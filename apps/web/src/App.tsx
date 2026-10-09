@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Routes, Route, Navigate, useLocation, useNavigate, useParams } from 'react-router-dom';
 import GlobalStyles from './theme/GlobalStyles';
 import AppShell from './layout/AppShell';
@@ -14,11 +14,22 @@ import {
   createListing, deleteListing, fetchCategories, fetchListing, fetchListings, updateListing,
   type ApiCategory,
 } from './api/catalog';
-import { fetchMyProfile, fetchProfile, toUser, updateMyProfile, type ApiProfile } from './api/profiles';
+import { deleteMyAccount, fetchMyProfile, fetchProfile, toUser, updateMyProfile, type ApiProfile } from './api/profiles';
 import {
   cancelOrder as apiCancelOrder, cancelOrderById, completeHandover, fetchMyOrders, fetchOrderStatus,
   formatHandoverCode, getHandoverQr, getPurchasesItem, normalizeHandoverCode, placeOrder as apiPlaceOrder,
 } from './api/orders';
+import {
+  fetchWishlists, addToWishlist, removeFromWishlist,
+  fetchMatchRules, fetchMatchRecords, createMatchRule, updateMatchRule, deleteMatchRule,
+  type ApiWishlist, type ApiMatchRule,
+} from './api/wishlist';
+import {
+  fetchNotificationPreferences, fetchNotifications,
+  markAllNotificationsRead as apiMarkAllNotificationsRead, markNotificationRead, updateNotificationPreferences,
+} from './api/notifications';
+import { createReview, fetchSellerRating, fetchSellerReviews } from './api/reviews';
+
 
 import LoginScreen from './screens/LoginScreen';
 import CatalogScreen from './screens/CatalogScreen';
@@ -26,16 +37,12 @@ import ListingScreen from './screens/ListingScreen';
 import SellScreen from './screens/SellScreen';
 import OrderScreen from './screens/OrderScreen';
 import ProfileScreen from './screens/ProfileScreen';
-import AdminCategoriesScreen from './screens/AdminCategoriesScreen';
 import AccountScreen from './screens/AccountScreen';
 import ChatScreen from './screens/ChatScreen';
 import HandoverScreen from './screens/HandoverScreen';
-import ModerationScreen from './screens/ModerationScreen';
 import MyListingsScreen from './screens/MyListingsScreen';
 import NotificationsScreen from './screens/NotificationsScreen';
-import ReportScreen from './screens/ReportScreen';
 import ReviewScreen from './screens/ReviewScreen';
-import SuspendedScreen from './screens/SuspendedScreen';
 import WishlistScreen from './screens/WishlistScreen';
 import ListingsRoute from './routes/listings/ListingsRoute';
 import OrdersRoute from './routes/orders/OrdersRoute';
@@ -44,43 +51,46 @@ import SellerProfileRoute from './routes/profile/SellerProfileRoute';
 
 import {
   CONDITIONS, FACULTIES, SPOTS,
-  REVIEWS, NOTIFICATION_PREFS,
-  SESSIONS, BLOCKED_USERS, NOTIFICATIONS,
-  THREADS, RESERVATIONS, AUTO_MATCH_ALERTS, MODERATION_CASES, AUDIT_LOG, MY_REPORTS,
+  SESSIONS,
+  THREADS, RESERVATIONS,
 } from './data/mockListings';
 import type {
-  AccountProfile, AutoMatchAlert, BlockedUser, ChatThread, ChatThreadListing, CurrentUser,
-  HandoverOrder, HandoverStage, Listing, ModerationCase, NotificationItem,
-  NotificationPrefsState, Order, Purchase, ReportTarget, Sale, SellForm, SellerReservation, Suspension,
+  AccountProfile, AutoMatchAlert, ChatThread, ChatThreadListing, CurrentUser,
+  HandoverOrder, HandoverStage, Listing, NotificationItem,
+  NotificationPrefDef, NotificationPrefsState, Order, Purchase, Review, Sale, SellerStats, SellForm, SellerReservation, AutoMatchHit,
 } from './types';
 
 const EMPTY_FORM: SellForm = {
-  title: '', price: '', cat: 'Electronics', cond: 'Like new', desc: '', spot: 'Sala Phra Kiao',
+  title: '', price: '', cat: '', cond: 'Like new', desc: '', spot: '',
 };
 
-const DEMO_SUSPENSION: Suspension = {
-  until: '4 Oct 2026', reason: 'Selling counterfeit goods — CU jersey listed as "official".',
-  caseId: 'CASE-1042', since: '27 Sep 2026', duration: '7 days',
-};
+const ANY_CATEGORY_ID = '00000000-0000-0000-0000-000000000000';
+
+const NOTIFICATION_PREFS: NotificationPrefDef[] = [
+  { key: 'inAppEnabled', name: 'In-app alerts', desc: 'Show notifications while you are using RachaSA.' },
+  { key: 'emailEnabled', name: 'Email alerts', desc: 'Send notification updates to your Chula email.' },
+];
 
 interface ListingRouteProps {
   listings: Listing[];
+  orders: Order[];
   loaded: boolean;
   loadListing: (id: string) => Promise<Listing | null>;
+  onDeleteListing: (id: string) => Promise<boolean>;
+  onCancelReservation: (id: string) => Promise<boolean>;
   wishIds: string[];
-  setWishIds: (fn: (ids: string[]) => string[]) => void;
+  wishlistMap: Record<string, string>;
+  onToggleWishlist: (listing: Listing) => void;
   setSelectedId: (id: string) => void;
   placeOrder: (listing: Listing) => void;
   openChat: (listing: Listing) => void;
-  openReport: (target: ReportTarget) => void;
-  setBlocked: (fn: (b: BlockedUser[]) => BlockedUser[]) => void;
-  flash: (msg: string) => void;
 }
 
 // Reads :id from the URL and keeps `selectedId` in sync so a direct link / refresh / back
 // button resolves to the right listing.
 function ListingRoute({
-  listings, loaded, loadListing, wishIds, setWishIds, setSelectedId, placeOrder, openChat, openReport, setBlocked, flash,
+  listings, orders, loaded, loadListing, onDeleteListing, onCancelReservation,
+  wishIds, wishlistMap, onToggleWishlist, setSelectedId, placeOrder, openChat,
 }: ListingRouteProps) {
   const { id = '' } = useParams<{ id: string }>();
   const navigate = useNavigate();
@@ -98,20 +108,26 @@ function ListingRoute({
   if (!listing) {
     return loaded && fetched === null ? <Navigate to="/" replace /> : null;
   }
+  const myReservation = orders.find((order) => order.listingId === listing.id && order.status === 'Reserved');
   return (
     <ListingScreen
+      key={`${listing.id}:${listing.status}`}
       listing={listing}
+      isOwner={!!listing.sellerId && listing.sellerId === getCurrentUserId()}
+      isMyReservation={listing.status === 'Reserved' && !!myReservation}
+      onViewMyOrder={() => { if (myReservation) navigate(`/orders/${myReservation.id}`); }}
+      onManage={() => navigate('/mylistings')}
+      onDelete={async () => {
+        const deleted = await onDeleteListing(listing.id);
+        if (deleted) navigate('/mylistings');
+        return deleted;
+      }}
+      onCancelReservation={() => onCancelReservation(listing.id)}
       wished={wishIds.includes(listing.id)}
       onPlaceOrder={() => placeOrder(listing)}
       onChat={() => openChat(listing)}
-      onToggleWishlist={() => {
-        const on = wishIds.includes(listing.id);
-        setWishIds((w) => (on ? w.filter((x) => x !== listing.id) : [...w, listing.id]));
-        flash(on ? 'Removed from wishlist' : 'Added to wishlist');
-      }}
+      onToggleWishlist={() => onToggleWishlist(listing)}
       onViewSeller={() => { if (listing.sellerId) navigate('/profile/' + listing.sellerId); }}
-      onReport={() => openReport({ type: 'Listing', title: listing.title, target: listing.seller })}
-      onBlock={() => { setBlocked((b) => [...b, { name: listing.seller, since: 'today' }]); flash(listing.seller + ' blocked.'); }}
     />
   );
 }
@@ -136,13 +152,16 @@ export default function App() {
   const [order, setOrder] = useState<Order | null>(null);
   const [orders, setOrders] = useState<Order[]>([]);
   const [sales, setSales] = useState<Sale[]>([]);
-  const [wishIds, setWishIds] = useState<string[]>(['10000000-0000-0000-0000-000000000003', '10000000-0000-0000-0000-000000000005']);
+  const [wishIds, setWishIds] = useState<string[]>([]);
+  // Map itemId -> wishlistId (the backend row id) for efficient removal
+  const [wishlistMap, setWishlistMap] = useState<Record<string, string>>({});
+  const [wishlistLoading, setWishlistLoading] = useState(false);
+  const [wishlistError, setWishlistError] = useState<string | null>(null);
   const [me, setMe] = useState<ApiProfile | null>(null);
-  const [prefs, setPrefs] = useState<NotificationPrefsState>({ chat: true, wishlist: true, order: true, promo: false });
+  const [prefs, setPrefs] = useState<NotificationPrefsState>({ inAppEnabled: true, emailEnabled: true });
   const [form, setForm] = useState<SellForm>(EMPTY_FORM);
   const [rateOpen, setRateOpen] = useState(false);
 
-  const [reportTarget, setReportTarget] = useState<ReportTarget | null>(null);
   const [handover, setHandover] = useState<{
     role: 'buyer' | 'seller'; saleId: string | null; code: string | null; codeLoading: boolean;
     stage: Record<'buyer' | 'seller', HandoverStage>; error: string | null;
@@ -150,19 +169,165 @@ export default function App() {
 
   const [threads, setThreads] = useState<ChatThread[]>(THREADS);
   const [activeThread, setActiveThread] = useState<number | string | null>(1);
-  const [notifications, setNotifications] = useState<NotificationItem[]>(NOTIFICATIONS);
-  const [blocked, setBlocked] = useState<BlockedUser[]>(BLOCKED_USERS);
-  const [cases, setCases] = useState<ModerationCase[]>(MODERATION_CASES);
+  const [notifications, setNotifications] = useState<NotificationItem[]>([]);
+  const [notificationsLoading, setNotificationsLoading] = useState(false);
+  const [notificationsError, setNotificationsError] = useState<string | null>(null);
+  const [preferencesLoading, setPreferencesLoading] = useState(false);
+  const [preferencesError, setPreferencesError] = useState<string | null>(null);
+  const [markingAllRead, setMarkingAllRead] = useState(false);
+  const [savingPreferences, setSavingPreferences] = useState(false);
   const [reservations, setReservations] = useState<Record<string, SellerReservation>>(RESERVATIONS);
-  const [alerts, setAlerts] = useState<AutoMatchAlert[]>(AUTO_MATCH_ALERTS);
+  const [alerts, setAlerts] = useState<AutoMatchAlert[]>([]);
+  const [matchHits, setMatchHits] = useState<AutoMatchHit[]>([]);
+  const [matchLoading, setMatchLoading] = useState(false);
+  const [matchError, setMatchError] = useState<string | null>(null);
   const [profile, setProfile] = useState<AccountProfile>({ contact: '' });
+  const [myReviews, setMyReviews] = useState<Review[]>([]);
+  const [myRating, setMyRating] = useState<SellerStats>({ avg: 0, count: 0 });
+  const [reviewStats, setReviewStats] = useState<SellerStats>({ avg: 0, count: 0 });
+  const [reviewSubmitting, setReviewSubmitting] = useState(false);
+  const [reviewError, setReviewError] = useState<string | null>(null);
+  const [reviewSubmitted, setReviewSubmitted] = useState(false);
+  const [deletingAccount, setDeletingAccount] = useState(false);
+  const [deleteAccountError, setDeleteAccountError] = useState<string | null>(null);
+  const deleteAccountPending = useRef(false);
 
   const { toast, flash } = useToast();
   // Signed in: real rooms from chat-service, live over Socket.IO. Signed out: the demo threads above.
   const liveChat = useLiveChat(loggedIn, categories);
-  const chatThreads = loggedIn ? liveChat.threads : threads;
-  const setChatThreads = loggedIn ? liveChat.setThreads : setThreads;
+  const chatThreads = loggedIn ? liveChat.threads.map((thread) => {
+    const itemId = thread.listing.id;
+    const currentListing = listings.find((item) => item.id === itemId);
+    const activeTransaction = orders.find((order) => order.listingId === itemId && order.status === 'Reserved')
+      ?? sales.find((sale) => sale.listingId === itemId && sale.status === 'Reserved');
+    const history = orders.find((order) => order.listingId === itemId)
+      ?? sales.find((sale) => sale.listingId === itemId);
+    const source = activeTransaction ?? currentListing ?? history;
+    if (!source) return thread;
+    return {
+      ...thread,
+      listing: {
+        ...thread.listing,
+        orderId: currentListing ? undefined : (activeTransaction ?? history)?.id,
+        title: source.title,
+        price: source.price,
+        status: source.status === 'Completed' ? 'Sold' as const : source.status,
+      },
+    };
+  }) : threads;
+  const requestedRoomId = location.pathname === '/chat' ? new URLSearchParams(location.search).get('roomId') : null;
+  useEffect(() => {
+    if (loggedIn && requestedRoomId && liveChat.activeId !== requestedRoomId && liveChat.threads.some((t) => t.id === requestedRoomId)) {
+      liveChat.select(requestedRoomId);
+    }
+  }, [loggedIn, requestedRoomId, liveChat.activeId, liveChat.threads, liveChat.select]);
   const { filters, setFilters, results, counts, reset } = useCatalogFilters(listings, query);
+
+  const categoryNameFor = (categoryId: string, availableCategories: ApiCategory[]) => (
+    categoryId === ANY_CATEGORY_ID
+      ? 'Any'
+      : availableCategories.find((category) => category.id === categoryId)?.name ?? 'Any'
+  );
+
+  const loadWishlistData = async () => {
+    setWishlistLoading(true);
+    setWishlistError(null);
+    try {
+      const wishlists = await fetchWishlists();
+      const map: Record<string, string> = {};
+      wishlists.forEach((wishlist: ApiWishlist) => { map[wishlist.itemId] = wishlist.id; });
+      setWishlistMap(map);
+      setWishIds(wishlists.map((wishlist: ApiWishlist) => wishlist.itemId));
+    } catch (err) {
+      setWishlistError('Could not load your saved listings: ' + (err instanceof Error ? err.message : 'unknown error'));
+      throw err;
+    } finally {
+      setWishlistLoading(false);
+    }
+  };
+
+  const loadMatchData = async (availableCategories: ApiCategory[]) => {
+    setMatchLoading(true);
+    setMatchError(null);
+    try {
+      const rules = await fetchMatchRules();
+      const activeRules = rules.filter((rule) => rule.isActive);
+      const recordsByRule = await Promise.all(activeRules.map(async (rule) => [
+        rule,
+        await fetchMatchRecords(rule.id),
+      ] as const));
+      const recordCountByRule = new Map(recordsByRule.map(([rule, matches]) => [rule.id, matches.length]));
+      const records = recordsByRule.flatMap(([rule, matches]) => matches.map((match) => ({ rule, match })));
+      const listingIds = [...new Set(records.map(({ match }) => match.matchedItemId))];
+      const resolvedListings = await Promise.all(listingIds.map(async (itemId) => [
+        itemId,
+        await fetchListing(itemId, availableCategories).catch(() => null),
+      ] as const));
+      const listingsById = new Map(resolvedListings);
+
+      setAlerts(rules.map((rule: ApiMatchRule) => ({
+        id: rule.id,
+        text: rule.keyword,
+        categoryId: rule.categoryId,
+        cat: categoryNameFor(rule.categoryId, availableCategories),
+        on: rule.isActive,
+        liveMatches: recordCountByRule.get(rule.id) ?? rule.matches?.length ?? 0,
+      })));
+      setMatchHits(records
+        .map(({ rule, match }) => {
+          const listing = listingsById.get(match.matchedItemId);
+          return listing ? {
+            id: match.id,
+            ruleId: rule.id,
+            listing,
+            keyword: rule.keyword,
+            score: Number(match.matchScore),
+            matchedAt: match.matchedAt,
+          } : null;
+        })
+        .filter((match): match is AutoMatchHit => match !== null)
+        .sort((a, b) => b.matchedAt.localeCompare(a.matchedAt)));
+    } catch (err) {
+      setMatchError('Could not load your auto-match alerts: ' + (err instanceof Error ? err.message : 'unknown error'));
+      throw err;
+    } finally {
+      setMatchLoading(false);
+    }
+  };
+
+  const loadNotificationsData = async () => {
+    setNotificationsLoading(true);
+    setNotificationsError(null);
+    try {
+      setNotifications(await fetchNotifications());
+    } catch (err) {
+      setNotificationsError('Could not load notifications: ' + (err instanceof Error ? err.message : 'unknown error'));
+      throw err;
+    } finally {
+      setNotificationsLoading(false);
+    }
+  };
+
+  const loadNotificationPreferences = async () => {
+    setPreferencesLoading(true);
+    setPreferencesError(null);
+    try {
+      setPrefs(await fetchNotificationPreferences());
+    } catch (err) {
+      setPreferencesError('Could not load notification preferences: ' + (err instanceof Error ? err.message : 'unknown error'));
+      throw err;
+    } finally {
+      setPreferencesLoading(false);
+    }
+  };
+
+  const loadMyReviewData = async () => {
+    const userId = getCurrentUserId();
+    if (!userId) return;
+    const [reviews, rating] = await Promise.all([fetchSellerReviews(userId), fetchSellerRating(userId)]);
+    setMyReviews(reviews);
+    setMyRating(rating);
+  };
 
   useEffect(() => {
     onUnauthorized(() => {
@@ -215,12 +380,40 @@ export default function App() {
       } catch (err) {
         if (!cancelled) flash('Could not load sales: ' + (err instanceof Error ? err.message : 'unknown error'));
       }
+      try { await loadWishlistData(); } catch { /* Error stays visible on the Wishlist screen. */ }
+      try { await loadMatchData(cats); } catch { /* Error stays visible on the Wishlist screen. */ }
+      try { await loadNotificationsData(); } catch { /* Error stays visible on the Notifications screen. */ }
+      try { await loadNotificationPreferences(); } catch { /* Error stays visible on the Notifications screen. */ }
+      try { await loadMyReviewData(); } catch { /* A profile can render without review history. */ }
     })();
     return () => { cancelled = true; };
   }, [loggedIn, flash]);
 
   const categoryNames = categories.map((c) => c.name);
   const categoryIdOf = (name: string) => categories.find((c) => c.name === name)?.id;
+
+  const createAutoMatchFromSearch = async (keyword: string, category: string) => {
+    const text = keyword.trim();
+    if (!text) {
+      navigate('/wishlist?tab=alerts');
+      return;
+    }
+    const categoryId = category === 'All' ? undefined : categoryIdOf(category);
+    if (category !== 'All' && !categoryId) {
+      const error = new Error('Choose a valid category before creating an auto-match.');
+      flash(error.message);
+      throw error;
+    }
+    try {
+      await createMatchRule({ keyword: text, categoryId, isActive: true });
+      await loadMatchData(categories);
+      navigate('/wishlist?tab=alerts');
+      flash(`Auto-match created for “${text}”.`);
+    } catch (err) {
+      flash('Could not create auto-match: ' + (err instanceof Error ? err.message : 'unknown error'));
+      throw err;
+    }
+  };
 
   const handleSignIn = () => {
     setSigningIn(true);
@@ -234,10 +427,110 @@ export default function App() {
     if (message) flash(message);
   };
 
+  const handleDeleteAccount = async () => {
+    if (deleteAccountPending.current) return;
+    deleteAccountPending.current = true;
+    setDeletingAccount(true);
+    setDeleteAccountError(null);
+    try {
+      await deleteMyAccount();
+      logout('Account deleted.');
+    } catch (err) {
+      setDeleteAccountError('Could not delete account: ' + (err instanceof Error ? err.message : 'unknown error'));
+    } finally {
+      deleteAccountPending.current = false;
+      setDeletingAccount(false);
+    }
+  };
+
   const openListing = (l: Listing | string) => {
     const id = typeof l === 'object' ? l.id : l;
     setSelectedId(id);
     navigate('/listing/' + id);
+  };
+
+  const markAllNotificationsRead = async () => {
+    if (markingAllRead || !notifications.some((notification) => !notification.read)) return;
+    setMarkingAllRead(true);
+    try {
+      await apiMarkAllNotificationsRead();
+      setNotifications((items) => items.map((item) => ({ ...item, read: true })));
+      flash('All notifications marked as read.');
+    } catch (err) {
+      flash('Could not mark notifications as read: ' + (err instanceof Error ? err.message : 'unknown error'));
+      throw err;
+    } finally {
+      setMarkingAllRead(false);
+    }
+  };
+
+  const toggleNotificationPreference = async (key: string) => {
+    if (savingPreferences || !(key in prefs)) return;
+    setSavingPreferences(true);
+    try {
+      const updated = await updateNotificationPreferences({ [key]: !prefs[key] });
+      setPrefs(updated);
+      flash('Notification preference saved.');
+    } catch (err) {
+      flash('Could not save notification preference: ' + (err instanceof Error ? err.message : 'unknown error'));
+      throw err;
+    } finally {
+      setSavingPreferences(false);
+    }
+  };
+
+  const selectReviewOrder = (nextOrder: Order) => {
+    if (nextOrder.status !== 'Completed' || nextOrder.rated) {
+      flash('Only completed orders that have not been reviewed can be rated.');
+      return false;
+    }
+    setOrder(nextOrder);
+    setReviewSubmitted(false);
+    setReviewError(null);
+    fetchSellerRating(nextOrder.sellerId)
+      .then(setReviewStats)
+      .catch(() => setReviewStats({ avg: 0, count: 0 }));
+    return true;
+  };
+
+  const submitReview = async ({ stars, tags = [], text }: { stars: number; tags?: string[]; text: string }) => {
+    if (!order || order.status !== 'Completed' || order.rated) {
+      const error = new Error('This order is not available for review.');
+      setReviewError(error.message);
+      throw error;
+    }
+    setReviewSubmitting(true);
+    setReviewError(null);
+    const comment = [tags.length ? tags.join(' · ') : '', text.trim()].filter(Boolean).join('\n\n') || undefined;
+    try {
+      await createReview({ orderId: order.id, rating: stars, comment });
+      const [updatedStats, updatedReviews] = await Promise.all([
+        fetchSellerRating(order.sellerId),
+        fetchSellerReviews(order.sellerId),
+      ]);
+      setOrders((items) => items.map((item) => (item.id === order.id ? { ...item, rated: true } : item)));
+      setOrder((current) => current && current.id === order.id ? { ...current, rated: true } : current);
+      setReviewStats(updatedStats);
+      setListings((items) => items.map((item) => (
+        item.sellerId === order.sellerId
+          ? { ...item, rating: updatedStats.avg, reviewCount: updatedStats.count }
+          : item
+      )));
+      if (order.sellerId === getCurrentUserId()) {
+        setMyReviews(updatedReviews);
+        setMyRating(updatedStats);
+      }
+      setReviewSubmitted(true);
+      setRateOpen(false);
+      flash('Review posted. Seller average updated.');
+    } catch (err) {
+      const message = 'Could not post review: ' + (err instanceof Error ? err.message : 'unknown error');
+      setReviewError(message);
+      flash(message);
+      throw err;
+    } finally {
+      setReviewSubmitting(false);
+    }
   };
 
   const placeOrder = async (listing: Listing) => {
@@ -313,28 +606,41 @@ export default function App() {
     } : s)));
   };
 
-  const cancelSale = async (saleId: string) => {
+  const cancelSale = async (saleId: string, listingId?: string) => {
     try {
       const status = await cancelOrderById(saleId);
       markSale(saleId, status);
       const sale = sales.find((s) => s.id === saleId);
-      if (sale) setListings((ls) => ls.map((l) => (l.id === sale.listingId ? { ...l, status: 'Available' as const } : l)));
+      const itemId = sale?.listingId ?? listingId;
+      if (itemId) setListings((ls) => ls.map((l) => (l.id === itemId ? { ...l, status: 'Available' as const } : l)));
       flash('Reservation cancelled. The item is Available again.');
       navigate('/mylistings');
+      return true;
     } catch (err) {
       flash('Could not cancel reservation: ' + (err instanceof Error ? err.message : 'unknown error'));
+      return false;
     }
   };
 
   const activeSaleFor = (listingId: string) => sales.find((s) => s.listingId === listingId && s.status === 'Reserved');
 
-  const cancelSellerReservation = (id: string) => {
-    const sale = activeSaleFor(id);
-    if (sale) { cancelSale(sale.id); return; }
-    setListings((ls) => ls.map((l) => (l.id === id ? { ...l, status: 'Available' as const } : l)));
-    setReservations((r) => { const n = { ...r }; delete n[id]; return n; });
-    flash('Reservation cancelled. The buyer was notified.');
-    navigate('/mylistings');
+  const cancelSellerReservation = async (id: string): Promise<boolean> => {
+    let sale = activeSaleFor(id);
+    if (!sale) {
+      try {
+        const refreshedSales = await getPurchasesItem(categories);
+        setSales(refreshedSales);
+        sale = refreshedSales.find((item) => item.listingId === id && item.status === 'Reserved');
+      } catch (err) {
+        flash('Could not load the active order: ' + (err instanceof Error ? err.message : 'unknown error'));
+        return false;
+      }
+    }
+    if (!sale) {
+      flash('No active order was found for this listing. Refresh to check its current status.');
+      return false;
+    }
+    return cancelSale(sale.id, id);
   };
 
   const handoverSaleId = handover.role === 'seller' ? handover.saleId : null;
@@ -372,12 +678,18 @@ export default function App() {
     if (!form.title.trim() || !form.price) { flash('Title and price are required.'); return; }
     const categoryId = categoryIdOf(form.cat);
     if (!categoryId) { flash('Pick a category.'); return; }
+    if (!CONDITIONS.includes(form.cond) || !SPOTS.includes(form.spot)) {
+      flash('Pick a condition and handover spot.');
+      return;
+    }
     try {
       const listing = await createListing({
         title: form.title.trim(),
         description: form.desc.trim(),
         price: Number(form.price),
         categoryId,
+        condition: form.cond,
+        handoverSpot: form.spot,
       }, categories);
       setListings((ls) => [listing, ...ls]);
       setForm(EMPTY_FORM);
@@ -388,13 +700,18 @@ export default function App() {
     }
   };
 
-  const saveListing = async (id: string, patch: { title: string; price: number; desc: string }) => {
+  const saveListing = async (id: string, patch: { title: string; price: number; cond?: string; desc: string; spot?: string }) => {
     try {
-      const updated = await updateListing(id, { title: patch.title, price: patch.price, description: patch.desc }, categories);
+      const updated = await updateListing(id, {
+        title: patch.title, price: patch.price, description: patch.desc,
+        condition: patch.cond, handoverSpot: patch.spot,
+      }, categories);
       setListings((ls) => ls.map((l) => (l.id === id ? updated : l)));
       flash('Listing updated.');
+      return true;
     } catch (err) {
       flash('Could not update: ' + (err instanceof Error ? err.message : 'unknown error'));
+      return false;
     }
   };
 
@@ -403,9 +720,37 @@ export default function App() {
       await deleteListing(id);
       setListings((ls) => ls.filter((l) => l.id !== id));
       setWishIds((w) => w.filter((x) => x !== id));
+      setWishlistMap((m) => { const { [id]: _, ...rest } = m; return rest; });
       flash('Listing deleted.');
+      return true;
     } catch (err) {
       flash('Could not delete: ' + (err instanceof Error ? err.message : 'unknown error'));
+      return false;
+    }
+  };
+
+  const toggleWishlist = async (listing: Listing) => {
+    const isWished = wishIds.includes(listing.id);
+    if (isWished) {
+      const wishlistId = wishlistMap[listing.id];
+      if (!wishlistId) return;
+      try {
+        await removeFromWishlist(wishlistId);
+        setWishIds((w) => w.filter((x) => x !== listing.id));
+        setWishlistMap((m) => { const { [listing.id]: _, ...rest } = m; return rest; });
+        flash('Removed from wishlist.');
+      } catch (err) {
+        flash('Could not remove from wishlist: ' + (err instanceof Error ? err.message : 'unknown error'));
+      }
+    } else {
+      try {
+        const created = await addToWishlist(listing.id);
+        setWishIds((w) => [...w, listing.id]);
+        setWishlistMap((m) => ({ ...m, [listing.id]: created.id }));
+        flash('Added to wishlist! ❤️');
+      } catch (err) {
+        flash('Could not add to wishlist: ' + (err instanceof Error ? err.message : 'unknown error'));
+      }
     }
   };
 
@@ -423,7 +768,7 @@ export default function App() {
     } else {
       const id = Date.now();
       setThreads((ts) => [{
-        id, name: l.seller, faculty: l.faculty, online: true, presence: 'Online now', unread: 0, blocked: false,
+        id, name: l.seller, faculty: l.faculty, online: true, presence: 'Online now', unread: 0,
         listing: { id: l.id, title: l.title, price: l.price, status: l.status },
         messages: [{ id: 's0', from: 'system', text: 'Chat started from the listing page' }],
       }, ...ts]);
@@ -434,7 +779,7 @@ export default function App() {
 
   const sendMessage = (threadId: number | string, text: string) => {
     const t = chatThreads.find((x) => x.id === threadId);
-    if (!t || t.blocked) { flash('Message not sent — this conversation is blocked.'); return; }
+    if (!t) return;
     if (loggedIn && typeof threadId === 'string') {
       liveChat.send(threadId, text).then((ack) => { if (!ack.ok) flash('Message not sent: ' + ack.error); });
       return;
@@ -444,24 +789,38 @@ export default function App() {
       : x)));
   };
 
-  const toggleBlock = (t: ChatThread) => {
-    const nowBlocked = !t.blocked;
-    setChatThreads((ts) => ts.map((x) => (x.id === t.id ? { ...x, blocked: nowBlocked } : x)));
-    setBlocked((b) => (nowBlocked ? [...b, { name: t.name, since: 'today' }] : b.filter((x) => x.name !== t.name)));
-    flash(nowBlocked ? t.name + ' blocked.' : t.name + ' unblocked.');
-  };
-
-  const openReport = (target: ReportTarget) => { setReportTarget(target); navigate('/report'); };
-
   const unread = notifications.filter((n) => !n.read).length;
-  const openNotification = (n: NotificationItem) => {
-    setNotifications((ns) => ns.map((x) => (x.id === n.id ? { ...x, read: true } : x)));
+  const openNotification = async (n: NotificationItem) => {
+    if (!n.read) {
+      try {
+        await markNotificationRead(String(n.id));
+        setNotifications((items) => items.map((item) => (item.id === n.id ? { ...item, read: true } : item)));
+      } catch (err) {
+        flash('Could not mark notification as read: ' + (err instanceof Error ? err.message : 'unknown error'));
+      }
+    }
     const a = n.action;
     if (!a) return;
-    if (a.type === 'listing' && a.listingId) openListing(a.listingId);
-    else if (a.type === 'chat' && a.id !== undefined) { setActiveThread(a.id); navigate('/chat'); }
-    else if (a.type === 'mylistings') navigate('/mylistings');
-    else if (a.type === 'account') navigate('/account');
+    if (a.type === 'listing') {
+      try {
+        const listing = await fetchListing(a.listingId, categories);
+        if (!listing) {
+          flash('This listing is no longer available.');
+          navigate('/browse');
+          return;
+        }
+        openListing(listing);
+      } catch (err) {
+        if (err instanceof ApiError && err.status === 404) {
+          flash('This listing is no longer available.');
+          navigate('/browse');
+        } else {
+          flash('Could not open listing: ' + (err instanceof Error ? err.message : 'unknown error'));
+        }
+      }
+    } else if (a.type === 'order') navigate(`/orders/${encodeURIComponent(a.orderId)}`);
+    else if (a.type === 'chat') navigate(`/chat?roomId=${encodeURIComponent(a.chatRoomId)}`);
+    else if (a.type === 'review') navigate(`/profile?tab=Reviews&reviewId=${encodeURIComponent(a.reviewId)}`);
   };
 
   const currentUserId = getCurrentUserId();
@@ -473,6 +832,9 @@ export default function App() {
     id: o.id, title: o.title, price: o.price, seller: o.seller, when: o.placedAt, status: o.status, spot: o.spot,
     action: o.status === 'Completed' ? 'Rate seller' : o.status === 'Reserved' ? 'In progress' : 'Cancelled',
   }));
+  const activeSale = sales.find((item) => item.status === 'Reserved');
+  const openOrderRef = orders.find((item) => item.status === 'Reserved')?.reference
+    ?? (activeSale ? `ORD-${activeSale.id.slice(0, 8).toUpperCase()}` : null);
   const savedAll = listings.filter((l) => wishIds.includes(l.id));
 
   const buyerHandover: HandoverOrder | null = order ? {
@@ -486,22 +848,12 @@ export default function App() {
     price: sellerSale.price, seller: currentUser.name, buyer: sellerSale.buyer, spot: sellerSale.spot, window: '—',
   } : null;
 
-  const reviewOrder = order && !order.rated
-    ? { title: order.title, price: order.price, seller: order.seller, when: order.status === 'Completed' ? 'Today' : order.window, status: order.status }
-    : { title: 'Calculus I & II textbook bundle', price: 400, seller: 'Narumedsr Pitayachamrat', when: '28 Jul 2026', status: 'Completed' as const };
-  const reviewSeller = listings.find((l) => l.seller === reviewOrder.seller);
-  const baseStats = { avg: Number(reviewSeller?.rating ?? 4.8), count: reviewSeller?.reviewCount ?? 26 };
-
-  // Suspended is full-bleed (no TopNav/AppShell chrome) whether reached from the login gate
-  // or the logged-in demo shortcut, so it's checked before either branch.
-  if (location.pathname === '/suspended') {
-    return (
-      <>
-        <GlobalStyles />
-        <SuspendedScreen suspension={DEMO_SUSPENSION} onBack={() => logout()} />
-      </>
-    );
-  }
+  const reviewOrder = order
+    ? {
+      orderId: order.id, sellerId: order.sellerId, title: order.title, price: order.price,
+      seller: order.seller, when: order.status === 'Completed' ? 'Today' : order.window, status: order.status,
+    }
+    : null;
 
   if (!loggedIn) {
     return (
@@ -520,33 +872,34 @@ export default function App() {
     onScanQr: () => openBuyerHandover(),
     onChat: () => { const l = listings.find((x) => x.id === order?.listingId); if (l) openChat(l); },
     onCancel: () => { if (order) cancelOrder(order); },
-    onRate: () => setRateOpen(true),
+    onRate: () => { if (order && selectReviewOrder(order)) setRateOpen(true); },
     onBrowse: () => navigate('/'),
   };
 
   const profileScreenElement = (
     <ProfileScreen
       isSelf
+      initialTab={new URLSearchParams(location.search).get('tab') ?? undefined}
+      focusReviewId={new URLSearchParams(location.search).get('reviewId') ?? undefined}
       user={currentUser}
       stats={[
-        ['SELLER RATING', '—'],
+        ['SELLER RATING', `${myRating.avg.toFixed(1)} ★`],
         ['ACTIVE LISTINGS', mine.filter((l) => l.status === 'Available').length],
-        ['ITEMS BOUGHT', orders.filter((o) => o.status === 'Completed').length],
+        ['REVIEWS', myRating.count],
         ['JOINED', currentUser.joined || '—'],
       ]}
       listings={mine}
       purchases={purchases}
       sales={sales}
       onShowHandoverCode={(sale) => openSellerHandover(sale.id)}
-      reviews={REVIEWS}
+      reviews={myReviews}
       prefs={prefs}
       notificationPrefs={NOTIFICATION_PREFS}
-      onTogglePref={(k) => setPrefs((p) => ({ ...p, [k]: !p[k] }))}
+      onTogglePref={(key) => { void toggleNotificationPreference(key); }}
       onEditProfile={() => navigate('/account')}
       onWishlist={() => navigate('/wishlist')}
       onSell={() => navigate('/sell')}
       onChat={() => {}}
-      onReport={() => {}}
       onOpenListing={openListing}
     />
   );
@@ -588,14 +941,16 @@ export default function App() {
               categories={categoryNames} conditions={CONDITIONS} faculties={FACULTIES}
               counts={counts} totalCount={listings.length} query={query}
               onOpenListing={openListing} onReset={reset}
+              onCreateAutoMatch={createAutoMatchFromSearch}
             />
           )} />
 
           <Route path="/listing/:id" element={(
             <ListingRoute
-              listings={listings} loaded={listingsLoaded} loadListing={(id) => fetchListing(id, categories)}
-              wishIds={wishIds} setWishIds={setWishIds} setSelectedId={setSelectedId}
-              placeOrder={placeOrder} openChat={openChat} openReport={openReport} setBlocked={setBlocked} flash={flash}
+              listings={listings} orders={orders} loaded={listingsLoaded} loadListing={(id) => fetchListing(id, categories)}
+              onDeleteListing={removeListing} onCancelReservation={cancelSellerReservation}
+              wishIds={wishIds} wishlistMap={wishlistMap} onToggleWishlist={toggleWishlist} setSelectedId={setSelectedId}
+              placeOrder={placeOrder} openChat={openChat}
             />
           )} />
 
@@ -614,10 +969,14 @@ export default function App() {
           <Route path="/orders/:orderId" element={(
             <OrderDetailRoute
               orders={orders}
+              sales={sales}
+              currentUserId={currentUser.id}
               onScanQr={(o) => openBuyerHandover(o)}
               onChat={(o) => { const l = listings.find((x) => x.id === o.listingId); if (l) openChat(l); }}
               onCancel={cancelOrder}
-              onRate={(o) => { setOrder(o); setRateOpen(true); }}
+              onRate={(o) => { if (selectReviewOrder(o)) setRateOpen(true); }}
+              onShowSellerQr={(sale) => openSellerHandover(sale.id)}
+              onCancelSale={cancelSale}
               onBrowse={() => navigate('/browse')}
             />
           )} />
@@ -635,49 +994,49 @@ export default function App() {
                 onVerifyCode={verifyHandoverCode}
                 onCancelReservation={isSeller && sellerSale?.status === 'Reserved' ? () => cancelSale(sellerSale.id) : undefined}
                 onChat={() => navigate('/chat')}
-                onRate={() => navigate('/review')}
+                onRate={() => { if (order && selectReviewOrder(order)) navigate('/review'); }}
                 onHome={() => navigate('/')}
               />
             );
           })()} />
 
-          <Route path="/review" element={(
+          <Route path="/review" element={reviewOrder ? (
             <ReviewScreen
               order={reviewOrder}
               reviewerName={currentUser.name}
-              sellerStats={baseStats}
+              sellerStats={reviewStats}
+              submitted={reviewSubmitted || order?.rated}
+              submitting={reviewSubmitting}
+              error={reviewError}
               onGoHandover={() => openBuyerHandover()}
               onHome={() => navigate('/')}
-              onSubmit={() => {
-                if (order && order.status === 'Completed') setOrder((o) => o && { ...o, rated: true });
-                flash('Review posted. Seller average updated.');
-                navigate('/');
-              }}
+              onSubmit={submitReview}
             />
-          )} />
+          ) : <Navigate to="/orders" replace />} />
 
           <Route path="/profile" element={profileScreenElement} />
           <Route path="/profile/:userId" element={(
             <SellerProfileRoute
               listings={listings}
               loadProfile={fetchProfile}
+              loadReviews={fetchSellerReviews}
+              loadRating={fetchSellerRating}
               purchases={purchases}
-              reviews={REVIEWS}
               prefs={prefs}
               notificationPrefs={NOTIFICATION_PREFS}
-              onTogglePref={(k) => setPrefs((p) => ({ ...p, [k]: !p[k] }))}
+              onTogglePref={(key) => { void toggleNotificationPreference(key); }}
               onEditProfile={() => navigate('/account')}
               onWishlist={() => navigate('/wishlist')}
               onSell={() => navigate('/sell')}
               onChat={(name) => { const l = listings.find((x) => x.seller === name); if (l) openChat(l); }}
-              onReport={(name) => openReport({ type: 'User', title: name, target: name })}
               onOpenListing={openListing}
             />
           )} />
 
           <Route path="/mylistings" element={(
             <MyListingsScreen
-              listings={mine} reservations={reservations} conditions={CONDITIONS}
+              listings={mine} reservations={reservations} conditions={CONDITIONS} spots={SPOTS}
+              onOpenListing={openListing}
               onSave={saveListing}
               onDelete={removeListing}
               onShowQr={(id) => {
@@ -694,9 +1053,11 @@ export default function App() {
             <AccountScreen
               user={{ name: currentUser.name, memberType: currentUser.memberType, faculty: currentUser.faculty, email: getCurrentClaims()?.email ?? '' }}
               profile={profile} sessions={SESSIONS}
-              myReports={MY_REPORTS} blocked={blocked}
               listingSummary={`${mine.filter((l) => l.status === 'Available').length} active · ${mine.filter((l) => l.status === 'Reserved').length} reserved · ${mine.filter((l) => l.status === 'Sold').length} sold`}
-              openOrderRef={order && order.status === 'Reserved' ? order.reference : null}
+              openOrderRef={openOrderRef}
+              deletingAccount={deletingAccount}
+              deleteAccountError={deleteAccountError}
+              onClearDeleteAccountError={() => setDeleteAccountError(null)}
               onSaveProfile={async (p) => {
                 try {
                   setMe(await updateMyProfile({ contactInfo: p.contact }));
@@ -709,106 +1070,139 @@ export default function App() {
               onChangePhoto={() => flash('Photo picker — replaces the directory photo.')}
               onLogout={() => logout('Signed out.')}
               onLogoutAll={() => logout('Signed out on all devices.')}
-              onUnblock={(name) => { setBlocked((b) => b.filter((x) => x.name !== name)); flash(name + ' unblocked.'); }}
               onMyListings={() => navigate('/mylistings')}
-              onDeleteAccount={() => logout('Account deletion requested.')}
+              onDeleteAccount={handleDeleteAccount}
             />
           )} />
 
           <Route path="/wishlist" element={(
             <WishlistScreen
+              initialTab={new URLSearchParams(location.search).get('tab') === 'alerts' ? 'alerts' : 'saved'}
               saved={savedAll.filter((l) => l.status !== 'Sold')}
-              autoRemoved={savedAll.filter((l) => l.status === 'Sold')}
-              alerts={alerts} matches={[]} categories={categoryNames}
-              notifyOn={prefs.wishlist}
-              onEnableNotify={() => setPrefs((p) => ({ ...p, wishlist: true }))}
+              alerts={alerts} matches={matchHits} categories={categoryNames}
+              loading={wishlistLoading || matchLoading}
+              error={wishlistError ?? matchError}
+              onRetry={async () => {
+                await Promise.all([loadWishlistData(), loadMatchData(categories)]);
+              }}
               onOpenListing={openListing}
-              onRemove={(id) => { setWishIds((w) => w.filter((x) => x !== id)); flash('Removed from wishlist'); }}
+              onRemove={async (itemId) => {
+                const wishlistId = wishlistMap[itemId];
+                if (!wishlistId) throw new Error('Saved listing was not found. Refresh and try again.');
+                try {
+                  await removeFromWishlist(wishlistId);
+                  setWishIds((w) => w.filter((x) => x !== itemId));
+                  setWishlistMap((m) => { const { [itemId]: _, ...rest } = m; return rest; });
+                  flash('Removed from wishlist.');
+                } catch (err) {
+                  flash('Could not remove: ' + (err instanceof Error ? err.message : 'unknown error'));
+                  throw err;
+                }
+              }}
               onBrowse={() => navigate('/browse')}
-              onCreateAlert={(a) => { setAlerts((as) => [{ id: Date.now(), on: true, liveMatches: 0, ...a }, ...as]); flash('Alert created.'); }}
-              onUpdateAlert={(id, patch) => { setAlerts((as) => as.map((a) => (a.id === id ? { ...a, ...patch } : a))); flash('Alert updated.'); }}
-              onDeleteAlert={(id) => { setAlerts((as) => as.filter((a) => a.id !== id)); flash('Alert deleted.'); }}
-              onToggleAlert={(id) => setAlerts((as) => as.map((a) => (a.id === id ? { ...a, on: !a.on } : a)))}
+              onCreateAlert={async (a) => {
+                const categoryId = a.cat === 'Any' ? undefined : categories.find((c) => c.name === a.cat)?.id;
+                if (a.cat !== 'Any' && !categoryId) throw new Error('Choose a valid category.');
+                try {
+                  await createMatchRule({ keyword: a.text, categoryId, isActive: true });
+                  await loadMatchData(categories);
+                  flash('Alert created.');
+                } catch (err) {
+                  flash('Could not create alert: ' + (err instanceof Error ? err.message : 'unknown error'));
+                  throw err;
+                }
+              }}
+              onUpdateAlert={async (id, patch) => {
+                const categoryId = patch.cat === 'Any'
+                  ? ANY_CATEGORY_ID
+                  : categories.find((c) => c.name === patch.cat)?.id;
+                if (!categoryId) throw new Error('Choose a valid category.');
+                try {
+                  await updateMatchRule(String(id), { keyword: patch.text, categoryId });
+                  await loadMatchData(categories);
+                  flash('Alert updated.');
+                } catch (err) {
+                  flash('Could not update alert: ' + (err instanceof Error ? err.message : 'unknown error'));
+                  throw err;
+                }
+              }}
+              onDeleteAlert={async (id) => {
+                try {
+                  await deleteMatchRule(String(id));
+                  await loadMatchData(categories);
+                  flash('Alert deleted.');
+                } catch (err) {
+                  flash('Could not delete alert: ' + (err instanceof Error ? err.message : 'unknown error'));
+                  throw err;
+                }
+              }}
+              onToggleAlert={async (id) => {
+                const alert = alerts.find((a) => a.id === id);
+                if (!alert) throw new Error('Auto-match alert was not found. Refresh and try again.');
+                try {
+                  await updateMatchRule(String(id), { isActive: !alert.on });
+                  await loadMatchData(categories);
+                } catch (err) {
+                  flash('Could not toggle alert: ' + (err instanceof Error ? err.message : 'unknown error'));
+                  throw err;
+                }
+              }}
             />
           )} />
 
           <Route path="/notifications" element={(
             <NotificationsScreen
               notifications={notifications} prefs={prefs} prefItems={NOTIFICATION_PREFS}
+              loading={notificationsLoading || preferencesLoading}
+              error={notificationsError ?? preferencesError}
+              markingAllRead={markingAllRead}
+              savingPreferences={savingPreferences}
               onOpen={openNotification}
-              onMarkAllRead={() => setNotifications((ns) => ns.map((n) => ({ ...n, read: true })))}
-              onTogglePref={(k) => setPrefs((p) => ({ ...p, [k]: !p[k] }))}
+              onRetry={async () => {
+                await Promise.all([loadNotificationsData(), loadNotificationPreferences()]);
+              }}
+              onMarkAllRead={markAllNotificationsRead}
+              onTogglePref={toggleNotificationPreference}
             />
           )} />
 
           <Route path="/chat" element={(
             <ChatScreen
-              threads={chatThreads} activeId={loggedIn ? liveChat.activeId : activeThread} typingId={null}
+              threads={chatThreads} activeId={loggedIn ? (requestedRoomId ?? liveChat.activeId) : activeThread} typingId={null}
+              emptyMessage={requestedRoomId
+                ? liveChat.roomsError ? 'Could not load conversations. Please refresh and try again.'
+                  : liveChat.roomsLoaded ? 'This conversation is no longer available to your account.'
+                    : 'Loading linked conversation…'
+                : undefined}
               onSelectThread={(id) => {
-                if (loggedIn) { liveChat.select(String(id)); return; }
+                if (loggedIn) { liveChat.select(String(id)); if (requestedRoomId) navigate('/chat', { replace: true }); return; }
                 setActiveThread(id); setThreads((ts) => ts.map((t) => (t.id === id ? { ...t, unread: 0 } : t)));
               }}
-              onBack={() => (loggedIn ? liveChat.setActiveId(null) : setActiveThread(null))}
+              onBack={() => {
+                if (loggedIn) {
+                  liveChat.setActiveId(null);
+                  if (requestedRoomId) navigate('/chat', { replace: true });
+                } else setActiveThread(null);
+              }}
               onSend={(id, text) => sendMessage(id, text)}
               onAttachPhoto={() => flash('Photo picker — up to 4 images.')}
-              onToggleBlock={toggleBlock}
-              onReport={(t) => openReport({ type: 'User', title: t.name, target: t.name })}
-              onOpenListing={(l: ChatThreadListing) => openListing(l.id)}
-            />
-          )} />
-
-          <Route path="/report" element={reportTarget ? (
-            <ReportScreen
-              target={{ ...reportTarget, orderRef: order?.reference }}
-              photos={[]}
-              onAddPhoto={() => flash('Photo picker — up to 4 images.')}
-              onSubmit={() => { flash('Report submitted — case created as Pending.'); navigate('/account'); }}
-              onCancel={() => navigate(-1)}
-            />
-          ) : <Navigate to="/account" replace />} />
-
-          <Route path="/moderation" element={(
-            <ModerationScreen
-              cases={cases} audit={AUDIT_LOG}
-              onStartReview={(id) => setCases((cs) => cs.map((c) => (c.id === id ? { ...c, state: 'In review' } : c)))}
-              onDismiss={(id) => setCases((cs) => cs.map((c) => (c.id === id ? { ...c, state: 'Dismissed', resolution: 'Dismissed — no policy violation found.' } : c)))}
-              onRemoveListing={(id) => { setCases((cs) => cs.map((c) => (c.id === id ? { ...c, state: 'Closed', resolution: 'Listing removed · seller notified.' } : c))); flash('Listing removed.'); }}
-              onSuspend={(id, { duration }) => {
-                setCases((cs) => cs.map((c) => (c.id === id ? { ...c, state: 'Closed', resolution: (duration === 'Permanent ban' ? 'Permanently banned' : 'Suspended ' + duration) + ' · sessions revoked.' } : c)));
-                flash('Action recorded.');
+              onOpenListing={(l: ChatThreadListing) => {
+                if (l.orderId) navigate(`/orders/${l.orderId}`);
+                else openListing(l.id);
               }}
-              onOpenEvidence={(c, e) => flash(e.k + ' for ' + c.id + ' opens read-only.')}
-            />
-          )} />
-
-          <Route path="/admin" element={(
-            <AdminCategoriesScreen
-              categories={categoryNames.map((c) => ({
-                id: c, name: c, slug: c.toLowerCase(), count: counts[c] || 0,
-              }))}
-              onNew={() => flash('New category — name, slug, parent.')}
-              onMerge={() => flash('Select two or more categories to merge.')}
-              onEdit={(c) => flash('Edit ' + c.name + ' — rename, re-slug, or merge.')}
             />
           )} />
 
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
-
-        <div style={{ padding: '0 24px 22px', display: 'flex', gap: 14, flexWrap: 'wrap', font: "500 11.5px/1.4 'Bai Jamjuree'", color: '#A8909B' }}>
-          {/* Demo-only shortcuts to screens that have no nav entry for a regular user. */}
-          <span>Demo:</span>
-          {[['moderation', 'Admin · moderation'], ['admin', 'Admin · categories'], ['account', 'Account'], ['mylistings', 'My listings']].map(([path, label]) => (
-            <span key={path} onClick={() => navigate('/' + path)} style={{ cursor: 'pointer', textDecoration: 'underline' }}>{label}</span>
-          ))}
-          <span onClick={() => navigate('/suspended')} style={{ cursor: 'pointer', textDecoration: 'underline' }}>Suspended login</span>
-        </div>
       </AppShell>
 
       <RateSellerDialog
         open={rateOpen}
         onClose={() => setRateOpen(false)}
-        onSubmit={() => { setRateOpen(false); setOrder((o) => o && { ...o, rated: true }); flash('Rating submitted.'); }}
+        onSubmit={({ stars, text }) => submitReview({ stars, text })}
+        submitting={reviewSubmitting}
+        error={reviewError}
       />
       <Toast message={toast} />
     </>
