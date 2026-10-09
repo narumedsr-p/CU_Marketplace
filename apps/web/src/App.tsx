@@ -61,7 +61,7 @@ import type {
 } from './types';
 
 const EMPTY_FORM: SellForm = {
-  title: '', price: '', cat: '', cond: '', desc: '', spot: '',
+  title: '', price: '', cat: '', cond: 'Like new', desc: '', spot: '',
 };
 
 const ANY_CATEGORY_ID = '00000000-0000-0000-0000-000000000000';
@@ -75,6 +75,8 @@ interface ListingRouteProps {
   listings: Listing[];
   loaded: boolean;
   loadListing: (id: string) => Promise<Listing | null>;
+  onDeleteListing: (id: string) => Promise<boolean>;
+  onCancelReservation: (id: string) => Promise<boolean>;
   wishIds: string[];
   wishlistMap: Record<string, string>;
   onToggleWishlist: (listing: Listing) => void;
@@ -86,7 +88,8 @@ interface ListingRouteProps {
 // Reads :id from the URL and keeps `selectedId` in sync so a direct link / refresh / back
 // button resolves to the right listing.
 function ListingRoute({
-  listings, loaded, loadListing, wishIds, wishlistMap, onToggleWishlist, setSelectedId, placeOrder, openChat,
+  listings, loaded, loadListing, onDeleteListing, onCancelReservation,
+  wishIds, wishlistMap, onToggleWishlist, setSelectedId, placeOrder, openChat,
 }: ListingRouteProps) {
   const { id = '' } = useParams<{ id: string }>();
   const navigate = useNavigate();
@@ -106,7 +109,16 @@ function ListingRoute({
   }
   return (
     <ListingScreen
+      key={`${listing.id}:${listing.status}`}
       listing={listing}
+      isOwner={!!listing.sellerId && listing.sellerId === getCurrentUserId()}
+      onManage={() => navigate('/mylistings')}
+      onDelete={async () => {
+        const deleted = await onDeleteListing(listing.id);
+        if (deleted) navigate('/mylistings');
+        return deleted;
+      }}
+      onCancelReservation={() => onCancelReservation(listing.id)}
       wished={wishIds.includes(listing.id)}
       onPlaceOrder={() => placeOrder(listing)}
       onChat={() => openChat(listing)}
@@ -571,28 +583,41 @@ export default function App() {
     } : s)));
   };
 
-  const cancelSale = async (saleId: string) => {
+  const cancelSale = async (saleId: string, listingId?: string) => {
     try {
       const status = await cancelOrderById(saleId);
       markSale(saleId, status);
       const sale = sales.find((s) => s.id === saleId);
-      if (sale) setListings((ls) => ls.map((l) => (l.id === sale.listingId ? { ...l, status: 'Available' as const } : l)));
+      const itemId = sale?.listingId ?? listingId;
+      if (itemId) setListings((ls) => ls.map((l) => (l.id === itemId ? { ...l, status: 'Available' as const } : l)));
       flash('Reservation cancelled. The item is Available again.');
       navigate('/mylistings');
+      return true;
     } catch (err) {
       flash('Could not cancel reservation: ' + (err instanceof Error ? err.message : 'unknown error'));
+      return false;
     }
   };
 
   const activeSaleFor = (listingId: string) => sales.find((s) => s.listingId === listingId && s.status === 'Reserved');
 
-  const cancelSellerReservation = (id: string) => {
-    const sale = activeSaleFor(id);
-    if (sale) { cancelSale(sale.id); return; }
-    setListings((ls) => ls.map((l) => (l.id === id ? { ...l, status: 'Available' as const } : l)));
-    setReservations((r) => { const n = { ...r }; delete n[id]; return n; });
-    flash('Reservation cancelled. The buyer was notified.');
-    navigate('/mylistings');
+  const cancelSellerReservation = async (id: string): Promise<boolean> => {
+    let sale = activeSaleFor(id);
+    if (!sale) {
+      try {
+        const refreshedSales = await getPurchasesItem(categories);
+        setSales(refreshedSales);
+        sale = refreshedSales.find((item) => item.listingId === id && item.status === 'Reserved');
+      } catch (err) {
+        flash('Could not load the active order: ' + (err instanceof Error ? err.message : 'unknown error'));
+        return false;
+      }
+    }
+    if (!sale) {
+      flash('No active order was found for this listing. Refresh to check its current status.');
+      return false;
+    }
+    return cancelSale(sale.id, id);
   };
 
   const handoverSaleId = handover.role === 'seller' ? handover.saleId : null;
@@ -652,7 +677,7 @@ export default function App() {
     }
   };
 
-  const saveListing = async (id: string, patch: { title: string; price: number; cond: string; desc: string; spot: string }) => {
+  const saveListing = async (id: string, patch: { title: string; price: number; cond?: string; desc: string; spot?: string }) => {
     try {
       const updated = await updateListing(id, {
         title: patch.title, price: patch.price, description: patch.desc,
@@ -660,8 +685,10 @@ export default function App() {
       }, categories);
       setListings((ls) => ls.map((l) => (l.id === id ? updated : l)));
       flash('Listing updated.');
+      return true;
     } catch (err) {
       flash('Could not update: ' + (err instanceof Error ? err.message : 'unknown error'));
+      return false;
     }
   };
 
@@ -672,8 +699,10 @@ export default function App() {
       setWishIds((w) => w.filter((x) => x !== id));
       setWishlistMap((m) => { const { [id]: _, ...rest } = m; return rest; });
       flash('Listing deleted.');
+      return true;
     } catch (err) {
       flash('Could not delete: ' + (err instanceof Error ? err.message : 'unknown error'));
+      return false;
     }
   };
 
@@ -896,6 +925,7 @@ export default function App() {
           <Route path="/listing/:id" element={(
             <ListingRoute
               listings={listings} loaded={listingsLoaded} loadListing={(id) => fetchListing(id, categories)}
+              onDeleteListing={removeListing} onCancelReservation={cancelSellerReservation}
               wishIds={wishIds} wishlistMap={wishlistMap} onToggleWishlist={toggleWishlist} setSelectedId={setSelectedId}
               placeOrder={placeOrder} openChat={openChat}
             />
@@ -983,6 +1013,7 @@ export default function App() {
           <Route path="/mylistings" element={(
             <MyListingsScreen
               listings={mine} reservations={reservations} conditions={CONDITIONS} spots={SPOTS}
+              onOpenListing={openListing}
               onSave={saveListing}
               onDelete={removeListing}
               onShowQr={(id) => {

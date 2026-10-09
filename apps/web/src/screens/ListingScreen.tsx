@@ -8,6 +8,10 @@ import type { Listing } from '../types';
 
 interface ListingScreenProps {
   listing: Listing;
+  isOwner: boolean;
+  onManage: () => void;
+  onDelete: () => Promise<boolean>;
+  onCancelReservation: () => Promise<boolean>;
   onPlaceOrder: () => void;
   onChat: () => void;
   onToggleWishlist: () => void;
@@ -17,11 +21,25 @@ interface ListingScreenProps {
 
 // Listing detail. No view counter by design — wishlist count is the social proof.
 export default function ListingScreen({
-  listing, onPlaceOrder, onChat, onToggleWishlist, wished,
+  listing, isOwner, onManage, onDelete, onCancelReservation,
+  onPlaceOrder, onChat, onToggleWishlist, wished,
   onViewSeller,
 }: ListingScreenProps) {
   const [photoIndex, setPhotoIndex] = useState(0);
+  const [confirmAction, setConfirmAction] = useState<'delete' | 'cancel' | null>(null);
+  const [actionPending, setActionPending] = useState(false);
   const available = listing.status === 'Available';
+
+  const confirmOwnerAction = async () => {
+    if (!confirmAction || actionPending) return;
+    setActionPending(true);
+    try {
+      const succeeded = await (confirmAction === 'delete' ? onDelete() : onCancelReservation());
+      if (succeeded) setConfirmAction(null);
+    } finally {
+      setActionPending(false);
+    }
+  };
 
   const specs: [string, string | number][] = [
     ['CONDITION', listing.cond ?? 'Not specified'],
@@ -131,23 +149,52 @@ export default function ListingScreen({
             <div style={{ ...labelStyle, color: '#A81756' }}>Handover spot</div>
             <div style={{ font: `500 13.5px/1.4 ${font}`, marginTop: 7 }}>{listing.spot}</div>
             <div style={{ font: `400 12.5px/1.5 ${font}`, color: color.muted, marginTop: 4 }}>
-              Pickup window is confirmed in chat after you order.
+              {isOwner ? 'Confirm the pickup window with the buyer in chat.' : 'Pickup window is confirmed in chat after you order.'}
             </div>
           </div>
 
-          <div style={{ display: 'flex', gap: 10, marginTop: 16 }}>
-            <Button onClick={onPlaceOrder} disabled={!available} style={{ flex: 1, opacity: available ? 1 : .55 }}>
-              {available ? 'Place order' : 'Reserved by someone else'}
-            </Button>
-            <Button variant="outline" onClick={onChat}>Chat</Button>
-          </div>
+          {isOwner ? (
+            <>
+              <div style={{ display: 'flex', gap: 10, marginTop: 16 }}>
+                <Button onClick={onManage} style={{ flex: 1 }}>Manage listing</Button>
+                {available && <Button variant="outline" disabled={actionPending} onClick={() => setConfirmAction('delete')}>Delete listing</Button>}
+                {listing.status === 'Reserved' && <Button variant="outline" disabled={actionPending} onClick={() => setConfirmAction('cancel')}>Cancel reservation</Button>}
+              </div>
+              {confirmAction && (
+                <div style={{ marginTop: 12, padding: '12px 14px', border: '1px solid ' + color.pinkLine, borderRadius: 10, background: color.pinkTint }}>
+                  <div style={{ font: `500 13px/1.5 ${font}`, color: color.body }}>
+                    {confirmAction === 'delete'
+                      ? 'Delete this listing? This cannot be undone.'
+                      : 'Cancel this reservation? The item will become Available again.'}
+                  </div>
+                  <div style={{ display: 'flex', gap: 8, marginTop: 10 }}>
+                    <Button size="sm" variant="ghost" disabled={actionPending} onClick={() => setConfirmAction(null)}>
+                      {confirmAction === 'delete' ? 'Keep listing' : 'Keep reservation'}
+                    </Button>
+                    <Button size="sm" disabled={actionPending} onClick={confirmOwnerAction}>
+                      {actionPending ? 'Please wait…' : confirmAction === 'delete' ? 'Confirm delete' : 'Confirm cancellation'}
+                    </Button>
+                  </div>
+                </div>
+              )}
+            </>
+          ) : (
+            <>
+              <div style={{ display: 'flex', gap: 10, marginTop: 16 }}>
+                <Button onClick={onPlaceOrder} disabled={!available} style={{ flex: 1, opacity: available ? 1 : .55 }}>
+                  {available ? 'Place order' : 'Reserved by someone else'}
+                </Button>
+                <Button variant="outline" onClick={onChat}>Chat</Button>
+              </div>
 
-          <Button
-            variant="ghost" full onClick={onToggleWishlist}
-            style={{ marginTop: 10, color: wished ? color.pink : color.muted }}
-          >
-            ♥ {wished ? 'Saved to wishlist' : 'Add to wishlist'}
-          </Button>
+              <Button
+                variant="ghost" full onClick={onToggleWishlist}
+                style={{ marginTop: 10, color: wished ? color.pink : color.muted }}
+              >
+                ♥ {wished ? 'Saved to wishlist' : 'Add to wishlist'}
+              </Button>
+            </>
+          )}
 
         </div>
       </div>
