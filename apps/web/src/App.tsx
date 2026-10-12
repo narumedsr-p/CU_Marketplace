@@ -78,6 +78,7 @@ interface ListingRouteProps {
   loadListing: (id: string) => Promise<Listing | null>;
   onDeleteListing: (id: string) => Promise<boolean>;
   onCancelReservation: (id: string) => Promise<boolean>;
+  onShowSellerQr: (id: string) => Promise<void>;
   wishIds: string[];
   wishlistMap: Record<string, string>;
   onToggleWishlist: (listing: Listing) => void;
@@ -89,7 +90,7 @@ interface ListingRouteProps {
 // Reads :id from the URL and keeps `selectedId` in sync so a direct link / refresh / back
 // button resolves to the right listing.
 function ListingRoute({
-  listings, orders, loaded, loadListing, onDeleteListing, onCancelReservation,
+  listings, orders, loaded, loadListing, onDeleteListing, onCancelReservation, onShowSellerQr,
   wishIds, wishlistMap, onToggleWishlist, setSelectedId, placeOrder, openChat,
 }: ListingRouteProps) {
   const { id = '' } = useParams<{ id: string }>();
@@ -117,6 +118,7 @@ function ListingRoute({
       isMyReservation={listing.status === 'Reserved' && !!myReservation}
       onViewMyOrder={() => { if (myReservation) navigate(`/orders/${myReservation.id}`); }}
       onManage={() => navigate('/mylistings')}
+      onShowHandoverQr={() => onShowSellerQr(listing.id)}
       onDelete={async () => {
         const deleted = await onDeleteListing(listing.id);
         if (deleted) navigate('/mylistings');
@@ -624,6 +626,25 @@ export default function App() {
 
   const activeSaleFor = (listingId: string) => sales.find((s) => s.listingId === listingId && s.status === 'Reserved');
 
+  const openSellerQrForListing = async (listingId: string) => {
+    let sale = activeSaleFor(listingId);
+    if (!sale) {
+      try {
+        const refreshedSales = await getPurchasesItem(categories);
+        setSales(refreshedSales);
+        sale = refreshedSales.find((item) => item.listingId === listingId && item.status === 'Reserved');
+      } catch (err) {
+        flash('Could not load the active order: ' + (err instanceof Error ? err.message : 'unknown error'));
+        return;
+      }
+    }
+    if (!sale) {
+      flash('No active order was found for this listing. Refresh to check its current status.');
+      return;
+    }
+    openSellerHandover(sale.id);
+  };
+
   const cancelSellerReservation = async (id: string): Promise<boolean> => {
     let sale = activeSaleFor(id);
     if (!sale) {
@@ -949,6 +970,7 @@ export default function App() {
             <ListingRoute
               listings={listings} orders={orders} loaded={listingsLoaded} loadListing={(id) => fetchListing(id, categories)}
               onDeleteListing={removeListing} onCancelReservation={cancelSellerReservation}
+              onShowSellerQr={openSellerQrForListing}
               wishIds={wishIds} wishlistMap={wishlistMap} onToggleWishlist={toggleWishlist} setSelectedId={setSelectedId}
               placeOrder={placeOrder} openChat={openChat}
             />
@@ -1039,11 +1061,7 @@ export default function App() {
               onOpenListing={openListing}
               onSave={saveListing}
               onDelete={removeListing}
-              onShowQr={(id) => {
-                const sale = activeSaleFor(id);
-                if (sale) openSellerHandover(sale.id);
-                else flash('No active order for this listing yet.');
-              }}
+              onShowQr={(id) => { void openSellerQrForListing(id); }}
               onCancelReservation={cancelSellerReservation}
               onNew={() => navigate('/sell')}
             />

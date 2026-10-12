@@ -12,6 +12,7 @@ interface ListingScreenProps {
   isMyReservation: boolean;
   onViewMyOrder: () => void;
   onManage: () => void;
+  onShowHandoverQr: () => Promise<void>;
   onDelete: () => Promise<boolean>;
   onCancelReservation: () => Promise<boolean>;
   onPlaceOrder: () => void;
@@ -23,14 +24,16 @@ interface ListingScreenProps {
 
 // Listing detail. No view counter by design — wishlist count is the social proof.
 export default function ListingScreen({
-  listing, isOwner, isMyReservation, onViewMyOrder, onManage, onDelete, onCancelReservation,
+  listing, isOwner, isMyReservation, onViewMyOrder, onManage, onShowHandoverQr, onDelete, onCancelReservation,
   onPlaceOrder, onChat, onToggleWishlist, wished,
   onViewSeller,
 }: ListingScreenProps) {
   const [photoIndex, setPhotoIndex] = useState(0);
   const [confirmAction, setConfirmAction] = useState<'delete' | 'cancel' | null>(null);
   const [actionPending, setActionPending] = useState(false);
+  const [qrPending, setQrPending] = useState(false);
   const available = listing.status === 'Available';
+  const qrAvailable = listing.status === 'Reserved';
   const canOpenOrder = listing.status === 'Reserved' && isMyReservation;
   const orderButtonLabel = available ? 'Place order'
     : canOpenOrder ? 'Reserved by you · View order'
@@ -45,6 +48,16 @@ export default function ListingScreen({
       if (succeeded) setConfirmAction(null);
     } finally {
       setActionPending(false);
+    }
+  };
+
+  const showHandoverQr = async () => {
+    if (qrPending || !qrAvailable) return;
+    setQrPending(true);
+    try {
+      await onShowHandoverQr();
+    } finally {
+      setQrPending(false);
     }
   };
 
@@ -169,6 +182,22 @@ export default function ListingScreen({
                 {available && <Button variant="outline" disabled={actionPending} onClick={() => setConfirmAction('delete')}>Delete listing</Button>}
                 {listing.status === 'Reserved' && <Button variant="outline" disabled={actionPending} onClick={() => setConfirmAction('cancel')}>Cancel reservation</Button>}
               </div>
+              {(available || qrAvailable) && (
+                <>
+                  <Button
+                    variant="ink" full disabled={qrPending || !qrAvailable}
+                    onClick={() => { void showHandoverQr(); }}
+                    style={{ marginTop: 10, opacity: available ? .5 : 1, cursor: qrPending || available ? 'not-allowed' : 'pointer' }}
+                  >
+                    {qrPending ? 'Opening handover QR…' : 'Show handover QR'}
+                  </Button>
+                  {available && (
+                    <div style={{ font: `400 12px/1.5 ${font}`, color: color.muted, marginTop: 6 }}>
+                      Handover QR becomes available after a buyer reserves this listing.
+                    </div>
+                  )}
+                </>
+              )}
               {confirmAction && (
                 <div style={{ marginTop: 12, padding: '12px 14px', border: '1px solid ' + color.pinkLine, borderRadius: 10, background: color.pinkTint }}>
                   <div style={{ font: `500 13px/1.5 ${font}`, color: color.body }}>
