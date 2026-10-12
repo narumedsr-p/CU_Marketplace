@@ -13,36 +13,42 @@ import { getServiceGrpcUrl, getRabbitMqUrl, getRetryableQueueOptions, QUEUES } f
 @Module({
   imports: [
     HttpModule,
-    ClientsModule.register([
+    ClientsModule.registerAsync([
       {
         name: 'CATALOG_PACKAGE',
-        transport: Transport.GRPC,
-        options: {
-          package: 'catalog',
-          // NB: webpack bundles every module into a single dist/main.cjs, so
-          // __dirname here resolves to the service's own dist/ dir at runtime
-          // (same depth as apps/<service>/dist/), not this file's source path.
-          protoPath: join(__dirname, '../../../libs/contracts/proto/catalog.proto'),
-          url: getServiceGrpcUrl('catalog'),
-        },
+        useFactory: () => ({
+          transport: Transport.GRPC,
+          options: {
+            package: 'catalog',
+            // NB: webpack bundles every module into a single dist/main.cjs, so
+            // __dirname here resolves to the service's own dist/ dir at runtime
+            // (same depth as apps/<service>/dist/), not this file's source path.
+            protoPath: join(__dirname, '../../../libs/contracts/proto/catalog.proto'),
+            url: getServiceGrpcUrl('catalog'),
+          },
+        }),
       },
       {
         name: 'NOTIFICATION_PACKAGE',
-        transport: Transport.RMQ,
-        options: {
-          urls: [getRabbitMqUrl()],
-          queue: QUEUES.notification,
-          queueOptions: { durable: true },
-        },
+        useFactory: () => ({
+          transport: Transport.RMQ,
+          options: {
+            urls: [getRabbitMqUrl()],
+            queue: QUEUES.notification,
+            queueOptions: { durable: true },
+          },
+        }),
       },
       {
         name: 'CATALOG_QUEUE_PACKAGE',
-        transport: Transport.RMQ,
-        options: {
-          urls: [getRabbitMqUrl()],
-          queue: QUEUES.catalogItemStatus,
-          queueOptions: getRetryableQueueOptions(QUEUES.catalogItemStatusRetry),
-        },
+        useFactory: () => ({
+          transport: Transport.RMQ,
+          options: {
+            urls: [getRabbitMqUrl()],
+            queue: QUEUES.catalogItemStatus,
+            queueOptions: getRetryableQueueOptions(QUEUES.catalogItemStatusRetry),
+          },
+        }),
       },
     ]),
   ],

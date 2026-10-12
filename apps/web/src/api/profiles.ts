@@ -44,6 +44,12 @@ export async function updateMyProfile(patch: ProfileUpdate) {
   return profile;
 }
 
+export async function deleteMyAccount() {
+  const profile = await api<ApiProfile>(`${PROFILES}/me`, { method: 'DELETE' });
+  cache.delete(profile.userId);
+  return profile;
+}
+
 export function memberSince(profile: ApiProfile) {
   return String(new Date(profile.createdAt).getFullYear());
 }

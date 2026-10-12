@@ -112,6 +112,7 @@ export class ReviewsService {
     const review = await this.prisma.review.create({
       data: {
         orderId: data.orderId,
+        itemTitle: order.itemTitle || null,
         reviewerId: data.reviewerId,
         revieweeId: order.sellerId,
         rating,
@@ -125,6 +126,8 @@ export class ReviewsService {
         userId: order.sellerId,
         title: 'New Review Received',
         message: `A buyer gave you a ${rating}-star rating for completed order ${order.id}`,
+        kind: 'review',
+        action: { type: 'review', reviewId: review.id },
       });
     } catch (err) {
       this.logger.error(`Failed to send review notification to seller ${order.sellerId}`, err);

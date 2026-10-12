@@ -24,6 +24,7 @@ export class OrdersGrpcController {
       status: order.status,
       buyerId: order.buyerId,
       sellerId: order.sellerId,
+      itemTitle: order.itemTitle ?? '',
     };
   }
 }

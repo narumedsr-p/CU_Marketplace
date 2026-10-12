@@ -1,12 +1,7 @@
 import { Controller, Logger } from '@nestjs/common';
 import { EventPattern, Payload } from '@nestjs/microservices';
 import { NotificationsService } from './notifications.service';
-
-interface PushMessage {
-  userId: string;
-  title: string;
-  message: string;
-}
+import type { NotificationPayload } from '@workspace/contracts';
 
 @Controller()
 export class NotificationsRmqController {
@@ -15,11 +10,11 @@ export class NotificationsRmqController {
   constructor(private readonly notificationsService: NotificationsService) {}
 
   @EventPattern('notification.push')
-  async pushNotification(@Payload() { userId, title, message }: PushMessage) {
+  async pushNotification(@Payload() payload: NotificationPayload) {
     try {
-      await this.notificationsService.create({ userId, title, message });
+      await this.notificationsService.create(payload);
     } catch (err: any) {
-      this.logger.error(`Failed to process notification.push for user ${userId}: ${err.message}`);
+      this.logger.error(`Failed to process notification.push for user ${payload?.userId}: ${err.message}`);
     }
   }
 }

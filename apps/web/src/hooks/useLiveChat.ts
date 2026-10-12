@@ -33,10 +33,9 @@ async function toThread(room: ApiChatRoom, me: string | null, categories: ApiCat
     id: room.id,
     name: profile?.displayName || 'Student',
     unread: 0,
-    blocked: room.isBlocked,
     listing: listing
       ? { id: listing.id, title: listing.title, price: listing.price, status: listing.status, photo: listing.photos?.[0] }
-      : { id: room.itemId, title: 'Listing', price: 0, status: 'Available' },
+      : { id: room.itemId, title: 'Listing details unavailable', price: 0, status: 'Empty' },
     messages: lastMessageOf(room).map((m) => toMessage(m, me)),
   };
 }
@@ -53,6 +52,8 @@ function withMessages(thread: ChatThread, incoming: ChatMessage[]): ChatThread {
 export default function useLiveChat(enabled: boolean, categories: ApiCategory[]) {
   const [threads, setThreads] = useState<ChatThread[]>([]);
   const [activeId, setActiveId] = useState<string | null>(null);
+  const [roomsLoaded, setRoomsLoaded] = useState(false);
+  const [roomsError, setRoomsError] = useState(false);
   const threadsRef = useRef(threads);
   threadsRef.current = threads;
   const activeRef = useRef(activeId);
@@ -68,16 +69,20 @@ export default function useLiveChat(enabled: boolean, categories: ApiCategory[])
       return old ? withMessages({ ...t, messages: old.messages, unread: old.unread }, t.messages) : t;
     }));
     setActiveId((cur) => cur ?? (fresh[0]?.id as string | undefined) ?? null);
+    setRoomsError(false);
+    setRoomsLoaded(true);
   }, [categories]);
 
   useEffect(() => {
     if (!enabled) {
       setThreads([]);
       setActiveId(null);
+      setRoomsLoaded(false);
+      setRoomsError(false);
       historyLoaded.current.clear();
       return;
     }
-    loadRooms().catch(() => {});
+    loadRooms().catch(() => { setRoomsError(true); setRoomsLoaded(true); });
   }, [enabled, loadRooms]);
 
   // Full history is fetched the first time a room is opened.
@@ -136,5 +141,5 @@ export default function useLiveChat(enabled: boolean, categories: ApiCategory[])
     select(room.id);
   }, [categories, select]);
 
-  return { threads, setThreads, activeId, setActiveId, select, send, openChatFor };
+  return { threads, setThreads, activeId, setActiveId, roomsLoaded, roomsError, select, send, openChatFor };
 }

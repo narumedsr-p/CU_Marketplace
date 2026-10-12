@@ -15,4 +15,5 @@ message OrderStatusResponse {
   string status = 2;
   string buyerId = 3;
   string sellerId = 4;
+  string itemTitle = 5;
 }

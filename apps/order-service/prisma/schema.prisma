@@ -18,6 +18,7 @@ model Order {
   buyerId     String      @map("buyer_id") @db.Uuid
   sellerId    String      @map("seller_id") @db.Uuid
   itemId      String      @map("item_id") @db.Uuid
+  itemTitle   String?     @map("item_title")
   agreedPrice Decimal     @map("agreed_price") @db.Decimal(10, 2)
   status      OrderStatus @default(Pending)
   qrToken     String?     @map("qr_token")

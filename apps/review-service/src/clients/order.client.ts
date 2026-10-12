@@ -8,6 +8,7 @@ interface OrderStatusResponse {
   status: string;
   buyerId: string;
   sellerId: string;
+  itemTitle: string;
 }
 
 interface OrderGrpcService {

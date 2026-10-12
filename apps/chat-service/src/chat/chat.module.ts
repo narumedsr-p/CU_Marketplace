@@ -15,15 +15,17 @@ import { ChatMessage, ChatMessageSchema } from './schemas/chat-message.schema';
       { name: ChatRoom.name, schema: ChatRoomSchema },
       { name: ChatMessage.name, schema: ChatMessageSchema },
     ]),
-    ClientsModule.register([
+    ClientsModule.registerAsync([
       {
         name: 'NOTIFICATION_PACKAGE',
-        transport: Transport.RMQ,
-        options: {
-          urls: [getRabbitMqUrl()],
-          queue: QUEUES.notification,
-          queueOptions: { durable: true },
-        },
+        useFactory: () => ({
+          transport: Transport.RMQ,
+          options: {
+            urls: [getRabbitMqUrl()],
+            queue: QUEUES.notification,
+            queueOptions: { durable: true },
+          },
+        }),
       },
     ]),
   ],

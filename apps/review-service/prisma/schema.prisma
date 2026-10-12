@@ -10,6 +10,7 @@ datasource db {
 model Review {
   id         String   @id @default(dbgenerated("gen_random_uuid()")) @map("review_id") @db.Uuid
   orderId    String   @map("order_id") @db.Uuid
+  itemTitle  String?  @map("item_title")
   reviewerId String   @map("reviewer_id") @db.Uuid
   revieweeId String   @map("reviewee_id") @db.Uuid
   rating     Int

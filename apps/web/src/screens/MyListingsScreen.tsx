@@ -18,13 +18,16 @@ interface EditForm {
   price: string;
   cond: string;
   desc: string;
+  spot: string;
 }
 
 interface MyListingsScreenProps {
   listings?: Listing[];
   reservations?: Record<string, SellerReservation>;
   conditions?: string[];
-  onSave?: (id: string, patch: { title: string; price: number; cond: string; desc: string }) => void;
+  spots?: string[];
+  onOpenListing: (listing: Listing) => void;
+  onSave: (id: string, patch: { title: string; price: number; cond?: string; desc: string; spot?: string }) => Promise<boolean>;
   onDelete?: (id: string) => void;
   onShowQr?: (id: string) => void;
   onCancelReservation?: (id: string) => void;
@@ -33,21 +36,39 @@ interface MyListingsScreenProps {
 
 // Seller's own listings (FR 5.2, 2.5). Edit is blocked while RESERVED (PATCH /listings/:id rule).
 export default function MyListingsScreen({
-  listings = [], reservations = {}, conditions = ['New', 'Like new', 'Good', 'Fair'],
-  onSave, onDelete, onShowQr, onCancelReservation, onNew,
+  listings = [], reservations = {}, conditions = ['New', 'Like new', 'Good', 'Fair'], spots = [],
+  onOpenListing, onSave, onDelete, onShowQr, onCancelReservation, onNew,
 }: MyListingsScreenProps) {
   const [tab, setTab] = useState<ListingTab>('Active');
   const [editId, setEditId] = useState<string | null>(null);
   const [delId, setDelId] = useState<string | null>(null);
-  const [form, setForm] = useState<EditForm>({ title: '', price: '', cond: '', desc: '' });
+  const [saving, setSaving] = useState(false);
+  const [form, setForm] = useState<EditForm>({ title: '', price: '', cond: '', desc: '', spot: '' });
   const rows = listings.filter((l) => tabOf(l) === tab);
   const count = (t: ListingTab) => listings.filter((l) => tabOf(l) === t).length;
+  const canSave = !!form.title.trim() && Number(form.price) > 0 && !saving;
+  const spotOptions = form.spot && !spots.includes(form.spot) ? [form.spot, ...spots] : spots;
 
-  const startEdit = (l: Listing) => { setDelId(null); setEditId(l.id); setForm({ title: l.title, price: String(l.price), cond: l.cond ?? '', desc: l.desc || '' }); };
-  const save = () => {
-    if (!form.title.trim() || !form.price || editId === null) return;
-    onSave && onSave(editId, { title: form.title.trim(), price: Number(form.price), cond: form.cond, desc: form.desc });
-    setEditId(null);
+  const startEdit = (l: Listing) => {
+    setDelId(null);
+    setEditId(l.id);
+    setForm({
+      title: l.title, price: String(l.price), cond: l.cond && conditions.includes(l.cond) ? l.cond : '',
+      desc: l.desc || '', spot: l.spot === 'To be arranged in chat' ? '' : l.spot,
+    });
+  };
+  const save = async () => {
+    if (!canSave || editId === null) return;
+    setSaving(true);
+    try {
+      const saved = await onSave(editId, {
+        title: form.title.trim(), price: Number(form.price), desc: form.desc,
+        cond: form.cond || undefined, spot: form.spot || undefined,
+      });
+      if (saved) setEditId(null);
+    } finally {
+      setSaving(false);
+    }
   };
 
   return (
@@ -72,17 +93,24 @@ export default function MyListingsScreen({
           return (
             <div key={l.id} style={{ ...card, padding: 14 }}>
               <div style={{ display: 'flex', gap: 13, alignItems: 'flex-start', flexWrap: 'wrap' }}>
-                <PhotoSlot src={l.photo} label="" radius={9} style={{ width: 72, flex: 'none' }} />
-                <div style={{ flex: '1 1 200px', minWidth: 0 }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-                    <div style={{ font: `600 14.5px/1.35 ${font}` }}>{l.title}</div>
-                    <StatusBadge status={l.status} />
+                <button
+                  type="button"
+                  onClick={() => onOpenListing(l)}
+                  aria-label={`View ${l.title} listing details`}
+                  style={{ display: 'flex', gap: 13, alignItems: 'flex-start', flex: '1 1 240px', minWidth: 0, padding: 0, border: 0, background: 'transparent', textAlign: 'left', cursor: 'pointer', color: color.ink }}
+                >
+                  <PhotoSlot src={l.photo} label="" radius={9} style={{ width: 72, flex: 'none' }} />
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                      <div style={{ font: `600 14.5px/1.35 ${font}` }}>{l.title}</div>
+                      <StatusBadge status={l.status} />
+                    </div>
+                    <div style={{ font: `700 16px/1 ${font}`, color: color.pink, marginTop: 7 }}>{baht(l.price)}</div>
+                    <div style={{ font: `500 12px/1.5 ${font}`, color: color.muted, marginTop: 5 }}>
+                      {l.cond ? `${l.cond} · ` : ''}{l.cat} · posted {l.posted} · {l.watchers} wishlisted
+                    </div>
                   </div>
-                  <div style={{ font: `700 16px/1 ${font}`, color: color.pink, marginTop: 7 }}>{baht(l.price)}</div>
-                  <div style={{ font: `500 12px/1.5 ${font}`, color: color.muted, marginTop: 5 }}>
-                    {l.cond} · {l.cat} · posted {l.posted} · {l.watchers} wishlisted
-                  </div>
-                </div>
+                </button>
                 {l.status === 'Available' && editId !== l.id && (
                   <div style={{ display: 'flex', gap: 8, flex: 'none' }}>
                     <Button size="sm" variant="ghost" onClick={() => startEdit(l)}>Edit</Button>
@@ -121,13 +149,22 @@ export default function MyListingsScreen({
                       <Field label="Price ฿" inputMode="numeric" value={form.price} onChange={(e: ChangeEvent<HTMLInputElement>) => setForm({ ...form, price: e.target.value.replace(/[^0-9]/g, '') })} />
                     </div>
                   </div>
-                  <div style={{ display: 'flex', gap: 7, flexWrap: 'wrap' }}>
-                    {conditions.map((c) => <Chip key={c} size="sm" active={form.cond === c} onClick={() => setForm({ ...form, cond: c })}>{c}</Chip>)}
+                  <div>
+                    <div style={{ font: `600 12px/1.4 ${font}`, color: color.muted, marginBottom: 7 }}>Condition</div>
+                    <div style={{ display: 'flex', gap: 7, flexWrap: 'wrap' }}>
+                      {conditions.map((c) => <Chip key={c} size="sm" active={form.cond === c} onClick={() => setForm({ ...form, cond: c })}>{c}</Chip>)}
+                    </div>
+                  </div>
+                  <div>
+                    <div style={{ font: `600 12px/1.4 ${font}`, color: color.muted, marginBottom: 7 }}>Handover spot</div>
+                    <div style={{ display: 'flex', gap: 7, flexWrap: 'wrap' }}>
+                      {spotOptions.map((spot) => <Chip key={spot} size="sm" active={form.spot === spot} onClick={() => setForm({ ...form, spot })}>{spot}</Chip>)}
+                    </div>
                   </div>
                   <Field label="Description" as="textarea" rows={3} value={form.desc} onChange={(e: ChangeEvent<HTMLTextAreaElement>) => setForm({ ...form, desc: e.target.value })} />
                   <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
-                    <Button size="sm" variant="ghost" onClick={() => setEditId(null)}>Cancel</Button>
-                    <Button size="sm" onClick={save}>Save changes</Button>
+                    <Button size="sm" variant="ghost" disabled={saving} onClick={() => setEditId(null)}>Cancel</Button>
+                    <Button size="sm" disabled={!canSave} onClick={save}>{saving ? 'Saving…' : 'Save changes'}</Button>
                   </div>
                 </div>
               )}

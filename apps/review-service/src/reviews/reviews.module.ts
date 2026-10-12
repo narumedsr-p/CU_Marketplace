@@ -9,24 +9,28 @@ import { getServiceGrpcUrl, getRabbitMqUrl, QUEUES } from '@workspace/contracts'
 
 @Module({
   imports: [
-    ClientsModule.register([
+    ClientsModule.registerAsync([
       {
         name: 'ORDER_PACKAGE',
-        transport: Transport.GRPC,
-        options: {
-          package: 'order',
-          protoPath: join(__dirname, '../../../libs/contracts/proto/order.proto'),
-          url: getServiceGrpcUrl('order'),
-        },
+        useFactory: () => ({
+          transport: Transport.GRPC,
+          options: {
+            package: 'order',
+            protoPath: join(__dirname, '../../../libs/contracts/proto/order.proto'),
+            url: getServiceGrpcUrl('order'),
+          },
+        }),
       },
       {
         name: 'NOTIFICATION_PACKAGE',
-        transport: Transport.RMQ,
-        options: {
-          urls: [getRabbitMqUrl()],
-          queue: QUEUES.notification,
-          queueOptions: { durable: true },
-        },
+        useFactory: () => ({
+          transport: Transport.RMQ,
+          options: {
+            urls: [getRabbitMqUrl()],
+            queue: QUEUES.notification,
+            queueOptions: { durable: true },
+          },
+        }),
       },
     ]),
   ],

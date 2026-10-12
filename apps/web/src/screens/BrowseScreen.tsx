@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { color, font, baht, labelStyle } from '../theme/tokens';
 import Chip from '../components/Chip';
 import ListingGrid from '../components/ListingGrid';
@@ -18,14 +19,16 @@ interface BrowseScreenProps {
   query: string;
   onOpenListing: (listing: Listing) => void;
   onReset: () => void;
+  onCreateAutoMatch: (keyword: string, category: string) => Promise<void>;
   loading?: boolean;
 }
 
 // Search results with the sticky filter sidebar.
 export default function BrowseScreen({
   results, filters, onFilterChange, categories, conditions, faculties,
-  counts = {}, totalCount = 0, query, onOpenListing, onReset, loading,
+  counts = {}, totalCount = 0, query, onOpenListing, onReset, onCreateAutoMatch, loading,
 }: BrowseScreenProps) {
+  const [creatingMatch, setCreatingMatch] = useState(false);
   const set = (patch: Partial<CatalogFilters>) => onFilterChange({ ...filters, ...patch });
   const heading = query ? `Results for “${query}”`
     : filters.cat === 'All' ? 'All listings' : filters.cat;
@@ -34,6 +37,16 @@ export default function BrowseScreen({
     filters.cond === 'Any' ? 'any condition' : filters.cond,
     'under ' + baht(filters.maxPrice),
   ].join(' · ');
+
+  const createAutoMatch = async () => {
+    if (creatingMatch) return;
+    setCreatingMatch(true);
+    try {
+      await onCreateAutoMatch(query, filters.cat);
+    } finally {
+      setCreatingMatch(false);
+    }
+  };
 
   return (
     <div style={{
@@ -133,7 +146,8 @@ export default function BrowseScreen({
           <EmptyState
             title="Nothing matches yet"
             body="Save it as an auto-match and we will notify you when it is posted."
-            actionLabel={query ? `Create auto-match for “${query}”` : 'Create an auto-match'}
+            actionLabel={creatingMatch ? 'Creating auto-match…' : query ? `Create auto-match for “${query}”` : 'Create an auto-match'}
+            onAction={() => { void createAutoMatch().catch(() => {}); }}
           />
         ) : (
           <ListingGrid listings={results} onOpen={onOpenListing} loading={loading} showFaculty={false} />

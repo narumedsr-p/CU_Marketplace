@@ -1,6 +1,6 @@
 import type {
-  AccountProfile, AccountUser, AuditEntry, AutoMatchAlert, BlockedUser, ChatThread,
-  CurrentUser, Listing, ModerationCase, MyReportSummary, NotificationItem, NotificationPrefDef,
+  AccountProfile, AccountUser, AutoMatchAlert, ChatThread,
+  CurrentUser, Listing,
   Purchase, Review, SellerReservation, Session,
 } from '../types';
 
@@ -43,13 +43,6 @@ export const REVIEWS: Review[] = [
   { id: 'r3', name: 'Beam S.', item: 'Calculus bundle', when: 'last month', stars: 4, text: 'Good price for the bundle. Had to reschedule once but they were flexible.' },
 ];
 
-export const NOTIFICATION_PREFS: NotificationPrefDef[] = [
-  { key: 'chat', name: 'Chat messages', desc: 'New message from a buyer or seller' },
-  { key: 'wishlist', name: 'Wishlist & auto-match', desc: 'A saved keyword matched a new listing' },
-  { key: 'order', name: 'Order status', desc: 'Reserved, cancelled, expired, completed' },
-  { key: 'promo', name: 'Campus announcements', desc: 'Faculty sale events and category drops' },
-];
-
 export const ACCOUNT_USER: AccountUser = {
   name: CURRENT_USER.name, memberType: CURRENT_USER.memberType,
   faculty: CURRENT_USER.faculty, email: '6731332321@student.chula.ac.th',
@@ -64,20 +57,9 @@ export const SESSIONS: Session[] = [
   { id: 's2', device: 'Safari on iPhone', meta: 'Bangkok · last active 2h ago' },
 ];
 
-export const BLOCKED_USERS: BlockedUser[] = [
-  { name: 'Win Prasert', since: '26 Sep 2026' },
-];
-
-export const NOTIFICATIONS: NotificationItem[] = [
-  { id: 1, kind: 'match', category: 'Auto-match', group: 'today', read: false, time: '4 min', title: 'Auto-match: “fx-991”', body: 'Casio fx-991EX scientific calculator · ฿550 — posted by Kannawich M. at Sala Phra Kiao.', cta: 'View listing', channel: 'Push · delivered', action: { type: 'listing', listingId: '10000000-0000-0000-0000-000000000008' } },
-  { id: 2, kind: 'chat', category: 'Chat', group: 'today', read: false, time: '18 min', title: 'Ploy W. replied', body: '“Yes, two spare nibs. Can meet at 5 at the Fine Arts courtyard?”', cta: 'Open chat', channel: 'In-app', action: { type: 'chat', id: 2 } },
-  { id: 3, kind: 'order', category: 'Orders', group: 'today', read: false, time: '1 h', title: 'Pickup window closes at 19:00', body: 'Mint R.’s reservation on your standing fan expires today.', cta: 'View my listings', channel: 'Push', action: { type: 'mylistings' } },
-  { id: 4, kind: 'account', category: 'Account', group: 'earlier', read: true, time: 'Mon', title: 'Your report was resolved', body: 'Case CASE-1031 “Replica jersey”: the listing was removed by a moderator.', cta: 'See my reports', channel: 'In-app', action: { type: 'account' } },
-];
-
 export const THREADS: ChatThread[] = [
   {
-    id: 1, name: 'Kannawich Munsak', faculty: 'Engineering', online: true, presence: 'Online now', unread: 1, blocked: false,
+    id: 1, name: 'Kannawich Munsak', faculty: 'Engineering', online: true, presence: 'Online now', unread: 1,
     listing: { id: '10000000-0000-0000-0000-000000000001', title: 'iPad Air 4 64GB, Wi-Fi, space grey', price: 8900, status: 'Available' },
     messages: [
       { id: 'm1', from: 'them', text: 'Hi! Yes, it’s still available.', time: '14:02' },
@@ -85,7 +67,7 @@ export const THREADS: ChatThread[] = [
     ],
   },
   {
-    id: 2, name: 'Ploy Wanichkul', faculty: 'Fine Arts', online: false, presence: 'Active 1h ago', unread: 0, blocked: false,
+    id: 2, name: 'Ploy Wanichkul', faculty: 'Fine Arts', online: false, presence: 'Active 1h ago', unread: 0,
     listing: { id: '10000000-0000-0000-0000-000000000005', title: 'Wacom Intuos S drawing tablet with pen', price: 1450, status: 'Available' },
     messages: [
       { id: 'm3', from: 'system', text: 'Chat started from the listing page' },
@@ -99,33 +81,6 @@ export const RESERVATIONS: Record<string, SellerReservation> = {
 };
 
 export const AUTO_MATCH_ALERTS: AutoMatchAlert[] = [
-  { id: 1, text: 'fx-991', cat: 'Electronics', max: 700, on: true, liveMatches: 1 },
+  { id: 1, text: 'fx-991', cat: 'Electronics', on: true, liveMatches: 1 },
   { id: 2, text: 'lab coat M', cat: 'Any', on: true, liveMatches: 0 },
-];
-
-export const MODERATION_CASES: ModerationCase[] = [
-  {
-    id: 'CASE-1042', type: 'Listing', sev: 'High', state: 'Pending',
-    title: '“Official” CU jersey 2025 at 3× retail', target: 'Jirayu Kaewmanee', targetFac: 'Economics',
-    reason: 'Counterfeit or misleading', reporter: 'Mint R.', when: '12 min ago', count: 3,
-    note: 'Tag photo shows a different logo from the co-op store.',
-    evidence: [{ k: 'Listing photos', v: '4 photos · tag photo flagged' }, { k: 'Order history', v: '5 completed, 2 disputed' }],
-    activeListings: 6, accountAge: '4 months', prior: '1 warning (Aug)',
-  },
-  {
-    id: 'CASE-1031', type: 'Listing', sev: 'High', state: 'Closed',
-    title: 'Replica CU jersey sold as official', target: 'Jirayu Kaewmanee', targetFac: 'Economics',
-    reason: 'Counterfeit or misleading', reporter: 'You', when: 'Mon', count: 3,
-    note: 'Print peeled after one wash.', evidence: [{ k: 'Listing photos', v: '2 photos' }],
-    activeListings: 6, accountAge: '4 months', prior: 'none', resolution: 'Listing removed · seller warned.',
-  },
-];
-
-export const AUDIT_LOG: AuditEntry[] = [
-  { id: 'a1', t: '14:02', actor: 'You (admin)', code: 'REPORT_REVIEW', target: 'CASE-1042', detail: 'Pending → In review', kind: 'Moderation' },
-  { id: 'a2', t: '09:14', actor: 'System', code: 'AUTOMATCH_EVAL', target: 'Listing #13', detail: '1 alert matched', kind: 'System' },
-];
-
-export const MY_REPORTS: MyReportSummary[] = [
-  { id: 'CASE-1031', title: 'Replica CU jersey sold as official', state: 'Closed', reason: 'Counterfeit or misleading', when: 'Mon', resolution: 'Listing removed · seller warned.' },
 ];

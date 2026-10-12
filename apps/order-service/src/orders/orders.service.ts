@@ -30,6 +30,7 @@ export class OrdersService {
     buyerId: true,
     sellerId: true,
     itemId: true,
+    itemTitle: true,
     agreedPrice: true,
     status: true,
     createdAt: true,
@@ -76,6 +77,7 @@ export class OrdersService {
     const order = await this.prisma.order.create({
       data: {
         itemId: data.itemId,
+        itemTitle: item.title,
         buyerId: data.buyerId,
         sellerId: item.sellerId,
         agreedPrice: item.price,
@@ -113,6 +115,8 @@ export class OrdersService {
         userId: order.sellerId,
         title: "New Order",
         message: `New order ${order.id} received`,
+        kind: 'order',
+        action: { type: 'order', orderId: order.id },
       });
     } catch (err) {
       this.logger.error(`Failed to notify seller for order ${order.id}`, err);

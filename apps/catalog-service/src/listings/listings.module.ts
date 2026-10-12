@@ -9,15 +9,17 @@ import { getRabbitMqUrl, getRetryableQueueOptions, QUEUES } from '@workspace/con
 
 @Module({
   imports: [
-    ClientsModule.register([
+    ClientsModule.registerAsync([
       {
         name: 'WISHLIST_PACKAGE',
-        transport: Transport.RMQ,
-        options: {
-          urls: [getRabbitMqUrl()],
-          queue: QUEUES.wishlistEvaluate,
-          queueOptions: getRetryableQueueOptions(QUEUES.wishlistEvaluateRetry),
-        },
+        useFactory: () => ({
+          transport: Transport.RMQ,
+          options: {
+            urls: [getRabbitMqUrl()],
+            queue: QUEUES.wishlistEvaluate,
+            queueOptions: getRetryableQueueOptions(QUEUES.wishlistEvaluateRetry),
+          },
+        }),
       },
     ]),
   ],

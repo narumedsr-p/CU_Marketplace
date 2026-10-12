@@ -6,7 +6,7 @@ generator client {
 
 datasource db {
   provider   = "postgresql"
-  extensions = [pgTrgm]
+  extensions = [pg_trgm(map: "pg_trgm")]
 }
 
 enum ItemStatus {
@@ -30,6 +30,8 @@ model Item {
   category    Category   @relation(fields: [categoryId], references: [id])
   title       String
   description String?
+  condition   String?    @db.VarChar(20)
+  handoverSpot String?    @map("handover_spot") @db.VarChar(120)
   price       Decimal    @db.Decimal(10, 2)
   status      ItemStatus @default(Available)
   imageUrls   String[]   @default([]) @map("image_urls")

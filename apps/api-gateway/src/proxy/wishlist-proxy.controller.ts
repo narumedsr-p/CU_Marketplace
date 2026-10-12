@@ -14,8 +14,7 @@ export class WishlistProxyController {
 
   constructor(private readonly httpService: HttpService) {}
 
-  @All('*')
-  async proxy(@Req() req: Request, @Res() res: Response) {
+  private async forward(req: Request, res: Response) {
     const matchedPrefix = this.prefixes.find((prefix) => req.originalUrl.startsWith(prefix));
     const path = matchedPrefix ? req.originalUrl.slice(matchedPrefix.length) || '/' : req.originalUrl;
 
@@ -38,5 +37,17 @@ export class WishlistProxyController {
       const status = error.response?.status ?? 502;
       res.status(status).json(error.response?.data ?? { message: 'Bad Gateway' });
     }
+  }
+
+  // Handle requests to the base path (e.g. POST /api/v1/wishlists, GET /api/v1/matches/rules)
+  @All()
+  proxyRoot(@Req() req: Request, @Res() res: Response) {
+    return this.forward(req, res);
+  }
+
+  // Handle requests with sub-paths (e.g. DELETE /api/v1/wishlists/:id)
+  @All('*')
+  proxySub(@Req() req: Request, @Res() res: Response) {
+    return this.forward(req, res);
   }
 }
