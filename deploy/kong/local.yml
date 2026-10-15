@@ -1,0 +1,128 @@
+_format_version: "3.0"
+
+services:
+  - name: profile-service-auth
+    url: http://host.docker.internal:3006
+    routes:
+      - name: auth-route
+        paths: ["/auth"]
+        strip_path: false
+
+  - name: web
+    url: http://host.docker.internal:5173
+    routes:
+      - name: web-route
+        paths: ["/"]
+        strip_path: false
+
+  - name: catalog-service
+    url: http://host.docker.internal:3001
+    routes:
+      - name: catalog-route
+        paths: ["/api/v1/catalog"]
+        strip_path: true
+    plugins: &protected_plugins
+      - name: jwt
+        config:
+          uri_param_names: ["token"]
+          claims_to_verify: ["exp"]
+      - name: post-function
+        config:
+          access:
+            - |
+              local cjson = require "cjson.safe"
+
+              local function b64url_decode(input)
+                input = input:gsub('-', '+'):gsub('_', '/')
+                local rem = #input % 4
+                if rem > 0 then input = input .. string.rep('=', 4 - rem) end
+                return ngx.decode_base64(input)
+              end
+
+              local function get_raw_token()
+                local auth_header = kong.request.get_header("authorization")
+                if auth_header then
+                  local _, _, token = string.find(auth_header, "Bearer%s+(.+)")
+                  if token then return token end
+                end
+                return kong.request.get_query_arg("token")
+              end
+
+              local token = get_raw_token()
+              if token then
+                local _, payload_b64 = token:match("([^.]+)%.([^.]+)%.?([^.]*)")
+                local payload_json = payload_b64 and b64url_decode(payload_b64)
+                local claims = payload_json and cjson.decode(payload_json)
+                if claims then
+                  kong.service.request.set_header("X-User-Id", claims.userId)
+                  kong.service.request.set_header("X-User-Role", claims.role)
+                end
+              end
+
+              local internal_key = os.getenv("INTERNAL_SERVICE_SECRET")
+              if internal_key then
+                kong.service.request.set_header("X-Internal-Key", internal_key)
+              end
+
+  - name: order-service
+    url: http://host.docker.internal:3002
+    routes:
+      - name: order-route
+        paths: ["/api/v1/orders"]
+        strip_path: true
+    plugins: *protected_plugins
+
+  - name: chat-service
+    url: http://host.docker.internal:3003
+    routes:
+      - name: chat-route
+        paths: ["/api/v1/chats"]
+        strip_path: true
+    plugins: *protected_plugins
+
+  - name: chat-service-socket
+    url: http://host.docker.internal:3003
+    routes:
+      - name: chat-socket-route
+        paths: ["/socket.io"]
+        strip_path: false
+    plugins: *protected_plugins
+
+  - name: wishlist-service
+    url: http://host.docker.internal:3004
+    routes:
+      - name: wishlist-route
+        paths: ["/api/v1/wishlists", "/api/v1/matches"]
+        strip_path: true
+    plugins: *protected_plugins
+
+  - name: review-service
+    url: http://host.docker.internal:3005
+    routes:
+      - name: review-route
+        paths: ["/api/v1/reviews"]
+        strip_path: true
+    plugins: *protected_plugins
+
+  - name: profile-service-api
+    url: http://host.docker.internal:3006
+    routes:
+      - name: profile-route
+        paths: ["/api/v1/profiles"]
+        strip_path: true
+    plugins: *protected_plugins
+
+  - name: notification-service
+    url: http://host.docker.internal:3007
+    routes:
+      - name: notification-route
+        paths: ["/api/v1/notifications"]
+        strip_path: true
+    plugins: *protected_plugins
+
+consumers:
+  - username: cu-marketplace-auth
+    jwt_secrets:
+      - key: cu-marketplace-auth
+        algorithm: HS256
+        secret: dev-secret-change-me

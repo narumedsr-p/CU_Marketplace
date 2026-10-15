@@ -7,10 +7,10 @@ what's actually live right now versus what's still pending.
 
 ## Architecture
 
-- There's no standalone gateway process anymore. The old `api-gateway` app is gone, and
-  until Kong Ingress is deployed, each service has to be reached directly (see
-  [Setup](#setup)). Nothing injects `x-user-id`/`x-user-role`/`x-internal-key` for you
-  outside of `profile-service`'s own auth routes.
+- There's no standalone NestJS gateway process anymore. The old `api-gateway` app is gone;
+  Kong fills that role now, both in production (Kong Ingress on k8s, see `deploy/`) and
+  locally (a plain Kong container in `docker-compose.yml`, config in
+  `deploy/kong/local.yml`, see [Setup](#setup)).
 - `profile-service` owns login. Google OAuth and JWT minting live inside its `src/auth/`
   module instead of a separate gateway, making it the one service with public,
   unauthenticated HTTP routes (`/auth/google`, `/auth/google/callback`).
@@ -44,16 +44,13 @@ You'll need `GOOGLE_CLIENT_ID`/`GOOGLE_CLIENT_SECRET` from Google Cloud Console 
 Services → Credentials → OAuth client ID → Web application), with `GOOGLE_CALLBACK_URL`
 registered as an authorized redirect URI. Without these, login doesn't work at all.
 
-From there, the client sends `Authorization: Bearer <token>` on every request. The target
-design has Kong's `jwt` plugin verify the token at the edge and a `pre-function` plugin
-stamp `X-User-Id`/`X-User-Role`/`X-Internal-Key` onto the request before it reaches the
-service, so nothing downstream needs its own auth code. Downstream services read identity
-through the `@CurrentUser()` decorator, trusting those headers rather than verifying the
-JWT themselves.
-
-That part isn't deployed yet. Right now, with no gateway and no Kong running, nothing sets
-those headers, so authenticated REST calls and the chat socket won't work end to end until
-Kong is live.
+From there, the client sends `Authorization: Bearer <token>` on every request. Kong's `jwt`
+plugin verifies the token at the edge, and a `post-function` plugin stamps
+`X-User-Id`/`X-User-Role`/`X-Internal-Key` onto the request before it reaches the service,
+so nothing downstream needs its own auth code. Downstream services read identity through
+the `@CurrentUser()` decorator, trusting those headers rather than verifying the JWT
+themselves. This runs the same way locally (`docker-compose.yml`'s `kong` service) and in
+production (Kong Ingress on k8s).
 
 `UserProfile.email` is unique and maps a Google email to its `userId`, created on first
 login and reused after that. A deterministic hash would've been simpler, but it can't
@@ -93,8 +90,10 @@ apps/
 libs/
   contracts/              Shared @workspace/contracts package (UserClaims, service registry, queue topology)
     proto/                 .proto files for every internal gRPC service (shared by server + client sides)
-docker-compose.yml        Postgres 16 (7 isolated databases) + RabbitMQ (management UI on :15672)
+docker-compose.yml        Postgres 16 (7 isolated databases) + RabbitMQ (management UI on :15672) + Kong
 init-multiple-dbs.sh       Creates all 7 databases on container init
+deploy/                    k8s/Kong manifests for the real deployment (see deploy/README.md)
+  kong/local.yml             Kong's declarative config for the docker-compose version above
 ```
 
 ## Setup
@@ -107,15 +106,18 @@ init-multiple-dbs.sh       Creates all 7 databases on container init
 - pnpm
 - Docker (for local Postgres + RabbitMQ)
 
-### 1. Start Postgres + RabbitMQ
+### 1. Start Postgres + RabbitMQ + Kong
 
 ```bash
 docker compose up -d
 ```
 
 This spins up a single Postgres 16 instance on `localhost:5432` (provisioning all 7 service
-databases via `init-multiple-dbs.sh`) and a RabbitMQ broker on `localhost:5672`
-(management UI at `http://localhost:15672`).
+databases via `init-multiple-dbs.sh`), a RabbitMQ broker on `localhost:5672` (management UI
+at `http://localhost:15672`), and Kong on `localhost:8000`. Kong reaches the services (run
+in step 5, directly on the host, not in a container) via `host.docker.internal`; its routes
+and auth plugins are declared in `deploy/kong/local.yml`, the same jwt + post-function setup
+used in production, just in Kong's plain declarative config instead of k8s CRDs.
 
 ### 2. Configure environment variables
 
@@ -160,9 +162,10 @@ pnpm dev
 ```
 
 Starts every app in watch mode through Turborepo: each service on its assigned port (3001
-through 3007) and the frontend dev server on `:5173`. `apps/web/vite.config.ts` proxies each
-`/api/v1/<prefix>` straight to its service, since there's no gateway to do that yet; see the
-comment there for what's still broken until Kong is deployed.
+through 3007) and the frontend dev server on `:5173`. `apps/web/vite.config.ts` proxies
+`/api/v1`, `/auth`, and `/socket.io` to Kong on `localhost:8000` (started in step 1), which
+handles routing and auth the same way it does in production. Open `http://localhost:5173`
+and the whole login flow works end to end, same as a real deployment.
 
 ## gRPC
 

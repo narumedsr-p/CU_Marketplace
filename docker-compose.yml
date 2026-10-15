@@ -53,6 +53,23 @@ services:
       timeout: 5s
       retries: 5
 
+  kong:
+    image: kong:3.9
+    container_name: cu-marketplace-kong
+    restart: unless-stopped
+    environment:
+      KONG_DATABASE: 'off'
+      KONG_DECLARATIVE_CONFIG: /kong/local.yml
+      KONG_PROXY_LISTEN: '0.0.0.0:8000'
+      KONG_ADMIN_LISTEN: 'off'
+      INTERNAL_SERVICE_SECRET: ${INTERNAL_SERVICE_SECRET}
+    ports:
+      - '8000:8000'
+    volumes:
+      - ./deploy/kong/local.yml:/kong/local.yml:ro
+    extra_hosts:
+      - 'host.docker.internal:host-gateway'
+
 volumes:
   postgres_data:
   rabbitmq_data:

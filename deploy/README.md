@@ -3,6 +3,11 @@
 Runs CU Marketplace on Kubernetes behind Kong Ingress, replacing the old hand-rolled
 `api-gateway`. See the migration plan for why; this file just covers how to run it.
 
+This is for testing the real deployment (kind locally, k3s on EC2), not day-to-day coding.
+For that, `docker compose up -d` + `pnpm dev` already includes a plain Kong container
+(config in `deploy/kong/local.yml`) with the same auth setup, no k8s or Docker builds of
+the app images required; see the root README's [Setup](../README.md#setup).
+
 ## Layout
 
 ```
