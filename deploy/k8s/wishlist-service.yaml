@@ -1,0 +1,32 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: wishlist-service
+  namespace: cu-marketplace
+spec:
+  replicas: 1
+  selector:
+    matchLabels: { app: wishlist-service }
+  template:
+    metadata:
+      labels: { app: wishlist-service }
+    spec:
+      containers:
+        - name: wishlist-service
+          image: cu-marketplace/wishlist-service:latest
+          imagePullPolicy: IfNotPresent
+          envFrom:
+            - secretRef: { name: app-secrets }
+          resources:
+            requests: { cpu: "100m", memory: "128Mi" }
+            limits: { cpu: "500m", memory: "256Mi" }
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: wishlist-service
+  namespace: cu-marketplace
+spec:
+  selector: { app: wishlist-service }
+  ports:
+    - { name: http, port: 3004, targetPort: 3004 }

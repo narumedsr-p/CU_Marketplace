@@ -6,8 +6,8 @@ import type { ApiChatMessage } from '../api/chat';
 export type SendAck = { ok: true; message: ApiChatMessage } | { ok: false; error: string };
 
 // One Socket.IO connection per signed-in session. It goes to this origin's /socket.io (Vite proxies it
-// to the api-gateway, which verifies the token and forwards to chat-service). Browsers can't set
-// headers on a WebSocket, so the token travels in the query string.
+// straight to chat-service; Kong will own token verification once deployed — see vite.config.ts).
+// Browsers can't set headers on a WebSocket, so the token travels in the query string.
 export default function useChatSocket(enabled: boolean, onMessage: (message: ApiChatMessage) => void) {
   const socketRef = useRef<Socket | null>(null);
   const onMessageRef = useRef(onMessage);

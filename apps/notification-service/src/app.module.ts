@@ -8,7 +8,7 @@ import { InternalAuthGuard } from './common/guards/internal-auth.guard';
 @Module({
   imports: [
     MongooseModule.forRootAsync({
-      useFactory: () => ({ uri: process.env.MONGODB_URI }),
+      useFactory: () => ({ uri: process.env.NOTIFICATION_MONGODB_URI }),
     }),
     NotificationsModule,
     PreferencesModule,

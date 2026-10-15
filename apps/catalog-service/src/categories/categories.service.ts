@@ -5,7 +5,7 @@ import { PrismaPg } from '@prisma/adapter-pg';
 @Injectable()
 export class CategoriesService {
   private readonly prisma = new PrismaClient({
-    adapter: new PrismaPg({ connectionString: process.env.DATABASE_URL! }),
+    adapter: new PrismaPg({ connectionString: process.env.CATALOG_DATABASE_URL! }),
   });
 
   findAll() {

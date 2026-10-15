@@ -71,6 +71,6 @@ async function bootstrap() {
   });
   await app.startAllMicroservices();
 
-  await app.listen(process.env.PORT ?? SERVICE_PORTS.wishlist.http);
+  await app.listen(process.env.WISHLIST_PORT ?? SERVICE_PORTS.wishlist.http);
 }
 bootstrap();

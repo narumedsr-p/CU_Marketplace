@@ -26,11 +26,11 @@ async function bootstrap() {
     options: {
       package: 'order',
       protoPath: join(__dirname, '../../../libs/contracts/proto/order.proto'),
-      url: `0.0.0.0:${process.env.GRPC_PORT ?? SERVICE_PORTS.order.grpc}`,
+      url: `0.0.0.0:${process.env.ORDER_GRPC_PORT ?? SERVICE_PORTS.order.grpc}`,
     },
   });
   await app.startAllMicroservices();
 
-  await app.listen(process.env.PORT ?? SERVICE_PORTS.order.http);
+  await app.listen(process.env.ORDER_PORT ?? SERVICE_PORTS.order.http);
 }
 bootstrap();

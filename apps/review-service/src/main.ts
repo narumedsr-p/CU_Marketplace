@@ -20,6 +20,6 @@ async function bootstrap() {
   app.getHttpAdapter().get('/docs-json', (_req, res) => res.json(document));
   app.use('/docs', apiReference({ url: '/docs-json' }));
 
-  await app.listen(process.env.PORT ?? SERVICE_PORTS.review.http);
+  await app.listen(process.env.REVIEW_PORT ?? SERVICE_PORTS.review.http);
 }
 bootstrap();

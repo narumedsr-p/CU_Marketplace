@@ -1,0 +1,11 @@
+gateway:
+  proxy:
+    type: NodePort
+    http:
+      nodePort: 30080
+  customEnv:
+    INTERNAL_SERVICE_SECRET:
+      valueFrom:
+        secretKeyRef:
+          name: app-secrets
+          key: INTERNAL_SERVICE_SECRET

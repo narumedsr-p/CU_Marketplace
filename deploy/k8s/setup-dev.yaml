@@ -1,0 +1,48 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: cu-marketplace
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: app-secrets
+  namespace: cu-marketplace
+type: Opaque
+stringData:
+  INTERNAL_SERVICE_SECRET: "${INTERNAL_SERVICE_SECRET}"
+  JWT_SECRET: "${JWT_SECRET}"
+  JWT_ISSUER: "${JWT_ISSUER}"
+  RABBITMQ_URL: "amqp://cu_marketplace:${RABBITMQ_PASSWORD}@rabbitmq:5672"
+  GOOGLE_CLIENT_ID: "${GOOGLE_CLIENT_ID}"
+  GOOGLE_CLIENT_SECRET: "${GOOGLE_CLIENT_SECRET}"
+  GOOGLE_CALLBACK_URL: "${GOOGLE_CALLBACK_URL}"
+  ALLOWED_EMAIL_DOMAIN: "${ALLOWED_EMAIL_DOMAIN}"
+  FRONTEND_URL: "${FRONTEND_URL}"
+  CATALOG_SERVICE_HOST: "catalog-service"
+  CHAT_SERVICE_HOST: "chat-service"
+  ORDER_SERVICE_HOST: "order-service"
+  CATALOG_PORT: "3001"
+  CATALOG_GRPC_PORT: "4001"
+  CATALOG_DATABASE_URL: "postgresql://postgres:${POSTGRES_PASSWORD}@postgres:5432/cu_catalog_db?schema=public"
+  ORDER_PORT: "3002"
+  ORDER_GRPC_PORT: "4002"
+  ORDER_DATABASE_URL: "postgresql://postgres:${POSTGRES_PASSWORD}@postgres:5432/cu_order_db?schema=public"
+  CHAT_PORT: "3003"
+  CHAT_MONGODB_URI: "mongodb://cu_marketplace:${MONGO_PASSWORD}@mongo:27017/cu_chat_db?authSource=admin"
+  WISHLIST_PORT: "3004"
+  WISHLIST_DATABASE_URL: "postgresql://postgres:${POSTGRES_PASSWORD}@postgres:5432/cu_wishlist_db?schema=public"
+  REVIEW_PORT: "3005"
+  REVIEW_DATABASE_URL: "postgresql://postgres:${POSTGRES_PASSWORD}@postgres:5432/cu_review_db?schema=public"
+  PROFILE_PORT: "3006"
+  PROFILE_GRPC_PORT: "4006"
+  PROFILE_DATABASE_URL: "postgresql://postgres:${POSTGRES_PASSWORD}@postgres:5432/cu_profile_db?schema=public"
+  NOTIFICATION_PORT: "3007"
+  NOTIFICATION_MONGODB_URI: "mongodb://cu_marketplace:${MONGO_PASSWORD}@mongo:27017/cu_notification_db?authSource=admin"
+  POSTGRES_USER: "postgres"
+  POSTGRES_PASSWORD: "${POSTGRES_PASSWORD}"
+  POSTGRES_DB: "postgres"
+  MONGO_INITDB_ROOT_USERNAME: "cu_marketplace"
+  MONGO_INITDB_ROOT_PASSWORD: "${MONGO_PASSWORD}"
+  RABBITMQ_DEFAULT_USER: "cu_marketplace"
+  RABBITMQ_DEFAULT_PASS: "${RABBITMQ_PASSWORD}"

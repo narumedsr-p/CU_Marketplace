@@ -46,7 +46,7 @@ export interface ItemSearchRow {
 @Injectable()
 export class ListingsService {
   private readonly prisma = new PrismaClient({
-    adapter: new PrismaPg({ connectionString: process.env.DATABASE_URL! }),
+    adapter: new PrismaPg({ connectionString: process.env.CATALOG_DATABASE_URL! }),
   });
 
   constructor(private readonly wishlistClient: WishlistClient) {}

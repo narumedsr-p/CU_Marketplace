@@ -24,7 +24,7 @@ interface MatchCandidate {
 @Injectable()
 export class AutoMatchService {
   private readonly prisma = new PrismaClient({
-    adapter: new PrismaPg({ connectionString: process.env.DATABASE_URL! }),
+    adapter: new PrismaPg({ connectionString: process.env.WISHLIST_DATABASE_URL! }),
   });
   private readonly logger = new Logger(AutoMatchService.name);
 
