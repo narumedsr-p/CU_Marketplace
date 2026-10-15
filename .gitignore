@@ -6,3 +6,5 @@ generated/
 *.log
 *.tsbuildinfo
 .DS_Store
+deploy/secrets.*.env
+!deploy/secrets.env

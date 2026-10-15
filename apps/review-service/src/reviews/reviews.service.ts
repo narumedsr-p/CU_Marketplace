@@ -16,7 +16,7 @@ import { NotificationClient } from '../clients/notification.client';
 @Injectable()
 export class ReviewsService {
   private readonly prisma = new PrismaClient({
-    adapter: new PrismaPg({ connectionString: process.env.DATABASE_URL! }),
+    adapter: new PrismaPg({ connectionString: process.env.REVIEW_DATABASE_URL! }),
   });
   private readonly logger = new Logger(ReviewsService.name);
 

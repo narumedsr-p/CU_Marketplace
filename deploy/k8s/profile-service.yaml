@@ -1,0 +1,33 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: profile-service
+  namespace: cu-marketplace
+spec:
+  replicas: 1
+  selector:
+    matchLabels: { app: profile-service }
+  template:
+    metadata:
+      labels: { app: profile-service }
+    spec:
+      containers:
+        - name: profile-service
+          image: cu-marketplace/profile-service:latest
+          imagePullPolicy: IfNotPresent
+          envFrom:
+            - secretRef: { name: app-secrets }
+          resources:
+            requests: { cpu: "100m", memory: "128Mi" }
+            limits: { cpu: "500m", memory: "256Mi" }
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: profile-service
+  namespace: cu-marketplace
+spec:
+  selector: { app: profile-service }
+  ports:
+    - { name: http, port: 3006, targetPort: 3006 }
+    - { name: grpc, port: 4006, targetPort: 4006 }

@@ -3,7 +3,7 @@ import { Injectable } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { OAuth2Client } from 'google-auth-library';
 import { UserClaims } from '@workspace/contracts';
-import { ProfileClient } from './profile.client';
+import { ProfilesService } from '../profiles/profiles.service';
 
 @Injectable()
 export class AuthService {
@@ -13,7 +13,8 @@ export class AuthService {
     .map((d) => d.trim().toLowerCase())
     .filter(Boolean);
   private readonly googleCallbackUrl =
-    process.env.GOOGLE_CALLBACK_URL || 'http://localhost:3000/auth/google/callback';
+    process.env.GOOGLE_CALLBACK_URL || 'http://localhost:3006/auth/google/callback';
+  private readonly jwtIssuer = process.env.JWT_ISSUER || 'cu-marketplace-auth';
   private readonly googleClient = new OAuth2Client(
     process.env.GOOGLE_CLIENT_ID,
     process.env.GOOGLE_CLIENT_SECRET,
@@ -22,7 +23,7 @@ export class AuthService {
 
   constructor(
     private readonly jwtService: JwtService,
-    private readonly profileClient: ProfileClient,
+    private readonly profilesService: ProfilesService,
   ) {}
 
   // Step 1 of the real login flow: build Google's consent-screen URL. `state` is
@@ -83,7 +84,7 @@ export class AuthService {
 
     let profile: { userId: string; accountStatus: string; role: string };
     try {
-      profile = await this.findOrCreateProfileByEmail(email, name ?? email, picture ?? '');
+      profile = await this.profilesService.findOrCreateByEmail(email, name ?? email, picture ?? '');
     } catch {
       return `${this.frontendUrl}/?error=service_unavailable`;
     }
@@ -92,7 +93,14 @@ export class AuthService {
       return `${this.frontendUrl}/?error=account_deleted`;
     }
 
-    const claims: UserClaims = { userId: profile.userId, email, role: profile.role ?? 'Student' };
+    // `iss` lets Kong's jwt plugin (edge auth, once Kong fronts this service) pick the
+    // right credential/secret to verify against without provisioning one per end-user.
+    const claims: UserClaims & { iss: string } = {
+      userId: profile.userId,
+      email,
+      role: profile.role ?? 'Student',
+      iss: this.jwtIssuer,
+    };
     const token = this.jwtService.sign(claims);
     return `${this.frontendUrl}/?token=${token}`;
   }
@@ -106,13 +114,5 @@ export class AuthService {
     return this.allowedEmailDomains.some(
       (allowed) => domain === allowed || domain.endsWith(`.${allowed}`),
     );
-  }
-
-  private async findOrCreateProfileByEmail(
-    email: string,
-    displayName: string,
-    avatarUrl: string,
-  ): Promise<{ userId: string; accountStatus: string; role: string }> {
-    return this.profileClient.oauthLogin(email, displayName, avatarUrl);
   }
 }

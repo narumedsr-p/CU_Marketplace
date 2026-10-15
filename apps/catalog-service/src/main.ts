@@ -27,7 +27,7 @@ async function bootstrap() {
     options: {
       package: 'catalog',
       protoPath: join(__dirname, '../../../libs/contracts/proto/catalog.proto'),
-      url: `0.0.0.0:${process.env.GRPC_PORT ?? SERVICE_PORTS.catalog.grpc}`,
+      url: `0.0.0.0:${process.env.CATALOG_GRPC_PORT ?? SERVICE_PORTS.catalog.grpc}`,
     },
   });
 
@@ -64,6 +64,6 @@ async function bootstrap() {
 
   await app.startAllMicroservices();
 
-  await app.listen(process.env.PORT ?? SERVICE_PORTS.catalog.http);
+  await app.listen(process.env.CATALOG_PORT ?? SERVICE_PORTS.catalog.http);
 }
 bootstrap();

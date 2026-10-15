@@ -1,6 +1,7 @@
 import { config } from 'dotenv';
 import { expand } from 'dotenv-expand';
 import { join } from 'path';
+import cookieParser from 'cookie-parser';
 import { NestFactory } from '@nestjs/core';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import { Transport, MicroserviceOptions } from '@nestjs/microservices';
@@ -15,6 +16,8 @@ expand(config());
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
+  // Needed for the oauth_state CSRF cookie set/read in auth/auth.controller.ts.
+  app.use(cookieParser());
 
   const config = new DocumentBuilder().setTitle('Profile Service').setVersion('1.0').build();
   const document = SwaggerModule.createDocument(app, config);
@@ -26,11 +29,11 @@ async function bootstrap() {
     options: {
       package: 'profile',
       protoPath: join(__dirname, '../../../libs/contracts/proto/profile.proto'),
-      url: `0.0.0.0:${process.env.GRPC_PORT ?? SERVICE_PORTS.profile.grpc}`,
+      url: `0.0.0.0:${process.env.PROFILE_GRPC_PORT ?? SERVICE_PORTS.profile.grpc}`,
     },
   });
   await app.startAllMicroservices();
 
-  await app.listen(process.env.PORT ?? SERVICE_PORTS.profile.http);
+  await app.listen(process.env.PROFILE_PORT ?? SERVICE_PORTS.profile.http);
 }
 bootstrap();

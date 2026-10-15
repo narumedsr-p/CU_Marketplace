@@ -1,0 +1,30 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: web
+  namespace: cu-marketplace
+spec:
+  replicas: 1
+  selector:
+    matchLabels: { app: web }
+  template:
+    metadata:
+      labels: { app: web }
+    spec:
+      containers:
+        - name: web
+          image: cu-marketplace/web:latest
+          imagePullPolicy: IfNotPresent
+          resources:
+            requests: { cpu: "25m", memory: "32Mi" }
+            limits: { cpu: "200m", memory: "64Mi" }
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: web
+  namespace: cu-marketplace
+spec:
+  selector: { app: web }
+  ports:
+    - { name: http, port: 80, targetPort: 80 }
