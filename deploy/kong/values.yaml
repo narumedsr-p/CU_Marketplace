@@ -1,4 +1,7 @@
 gateway:
+  env:
+    untrusted_lua: "on"
+    nginx_main_env: INTERNAL_SERVICE_SECRET
   proxy:
     type: NodePort
     http:
