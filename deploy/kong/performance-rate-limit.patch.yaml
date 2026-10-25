@@ -1,0 +1,7 @@
+# Temporary test-only patch, NOT a standalone Kubernetes manifest.
+# Apply with kubectl patch kongplugin rate-limit --type=merge --patch-file=...
+# Keep the default in kong.yaml at 300/minute; restore it after testing.
+# 200 search requests/second = 12,000/minute. Leave room for other API calls.
+# Authentication, quota identity, policy and replicas are unchanged.
+config:
+  minute: 60000
