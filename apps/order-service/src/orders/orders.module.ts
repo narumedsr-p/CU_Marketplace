@@ -35,7 +35,7 @@ import { getServiceGrpcUrl, getRabbitMqUrl, getRetryableQueueOptions, QUEUES } f
           options: {
             urls: [getRabbitMqUrl()],
             queue: QUEUES.notification,
-            queueOptions: { durable: true },
+            queueOptions: getRetryableQueueOptions(QUEUES.notificationRetry),
           },
         }),
       },
