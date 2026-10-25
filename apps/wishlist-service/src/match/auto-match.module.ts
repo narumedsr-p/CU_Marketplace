@@ -4,7 +4,7 @@ import { AutoMatchController } from './auto-match.controller';
 import { AutoMatchRmqController } from './auto-match.rmq.controller';
 import { AutoMatchService } from './auto-match.service';
 import { NotificationClient } from '../clients/notification.client';
-import { getRabbitMqUrl, QUEUES } from '@workspace/contracts';
+import { getRabbitMqUrl, getRetryableQueueOptions, QUEUES } from '@workspace/contracts';
 
 @Module({
   imports: [
@@ -16,7 +16,7 @@ import { getRabbitMqUrl, QUEUES } from '@workspace/contracts';
           options: {
             urls: [getRabbitMqUrl()],
             queue: QUEUES.notification,
-            queueOptions: { durable: true },
+            queueOptions: getRetryableQueueOptions(QUEUES.notificationRetry),
           },
         }),
       },
