@@ -4,7 +4,7 @@ import { MongooseModule } from '@nestjs/mongoose';
 import { ChatController } from './chat.controller';
 import { ChatService } from './chat.service';
 import { NotificationClient } from '../clients/notification.client';
-import { getRabbitMqUrl, QUEUES } from '@workspace/contracts';
+import { getRabbitMqUrl, getRetryableQueueOptions, QUEUES } from '@workspace/contracts';
 import { ChatGateway } from './chat.gateway';
 import { ChatRoom, ChatRoomSchema } from './schemas/chat-room.schema';
 import { ChatMessage, ChatMessageSchema } from './schemas/chat-message.schema';
@@ -23,7 +23,7 @@ import { ChatMessage, ChatMessageSchema } from './schemas/chat-message.schema';
           options: {
             urls: [getRabbitMqUrl()],
             queue: QUEUES.notification,
-            queueOptions: { durable: true },
+            queueOptions: getRetryableQueueOptions(QUEUES.notificationRetry),
           },
         }),
       },
