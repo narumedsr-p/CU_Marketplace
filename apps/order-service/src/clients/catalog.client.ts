@@ -1,4 +1,4 @@
-import { Inject, Injectable, OnModuleInit } from '@nestjs/common';
+import { ConflictException, Inject, Injectable, OnModuleInit } from '@nestjs/common';
 import { HttpService } from '@nestjs/axios';
 import { ClientGrpc, ClientProxy } from '@nestjs/microservices';
 import { Metadata } from '@grpc/grpc-js';
@@ -38,13 +38,20 @@ export class CatalogClient implements OnModuleInit {
   }
 
   async getListing(id: string) {
-    const { data } = await firstValueFrom(
-      this.httpService.get(`${this.baseUrl}/items/${id}`, {
-        headers: this.headers,
-        timeout: this.timeout,
-      }),
-    );
-    return data;
+    try {
+      const { data } = await firstValueFrom(
+        this.httpService.get(`${this.baseUrl}/items/${id}`, {
+          headers: this.headers,
+          timeout: this.timeout,
+        }),
+      );
+      return data;
+    } catch (err: any) {
+      if (err?.response?.status === 404) {
+        throw new ConflictException('Item is no longer available');
+      }
+      throw err;
+    }
   }
 
   async reserveItem(id: string) {

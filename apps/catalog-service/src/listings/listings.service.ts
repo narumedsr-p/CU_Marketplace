@@ -77,6 +77,7 @@ export class ListingsService {
         FROM "Item"
         WHERE "status" = 'Available'::"ItemStatus"
           ${categoryFilter}
+          AND ${query.search}::text <% "title"
           AND word_similarity(${query.search}, "title") >= ${SEARCH_MIN_SCORE}
         ORDER BY "matchScore" DESC
       `);
