@@ -1,0 +1,44 @@
+{
+  "runId": "cf10850c-da1b-4025-98eb-179ee0671005",
+  "result": "PASS",
+  "scope": "Current source NotificationsRmqController plus real RabbitMQ; controlled create() stub. Not the deployed consumer or actual MongoDB delivery.",
+  "controllerSha256": "4144a4659ea003ee3898fd6fac8ae0b899ecdb57ff6164953fbb63c96b2c4309",
+  "startedAt": "2026-10-25T14:10:45.010Z",
+  "finishedAt": "2026-10-25T14:11:30.521Z",
+  "fixedRetryDelayMs": 10000,
+  "observationSeconds": 45,
+  "queues": {
+    "main": "reliability-notification-cf10850c-da1b-4025-98eb-179ee0671005.main",
+    "retry": "reliability-notification-cf10850c-da1b-4025-98eb-179ee0671005.retry",
+    "dlq": "reliability-notification-cf10850c-da1b-4025-98eb-179ee0671005.dlq"
+  },
+  "cases": {
+    "always-fail": {
+      "attempts": 4,
+      "attemptElapsedMs": [8, 10015, 20022, 30027],
+      "retryIntervalsMs": [10007, 10007, 10005],
+      "success": false,
+      "dlqMessages": 1,
+      "dlqRetryExpiryCount": 3,
+      "fifthAttemptObserved": false
+    },
+    "recover-on-retry-2": {
+      "attempts": 3,
+      "attemptElapsedMs": [10, 10017, 20024],
+      "retryIntervalsMs": [10007, 10007],
+      "success": true,
+      "dlqMessages": 0,
+      "retryAfterSuccessObserved": false
+    }
+  },
+  "remainingMainMessages": 0,
+  "remainingRetryMessages": 0,
+  "diagnostics": {
+    "failedEvidence": "Terminal DLQ presence and broker x-death count; no MongoDB Failed status",
+    "dlqMessageIdRetained": false,
+    "explicitFailedHeader": null,
+    "dlqPublisherConfirmSafetyTested": false,
+    "brokerCrashRecoveryTested": false
+  },
+  "cleanup": "Deleted only the three UUID-scoped test queues and closed the test port-forward; normal application queues and data untouched."
+}

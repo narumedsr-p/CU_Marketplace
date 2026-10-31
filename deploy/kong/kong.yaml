@@ -80,6 +80,8 @@ kind: KongConsumer
 metadata:
   name: cu-marketplace-auth
   namespace: cu-marketplace
+  annotations:
+    kubernetes.io/ingress.class: kong
 username: cu-marketplace-auth
 credentials:
   - cu-marketplace-jwt-credential

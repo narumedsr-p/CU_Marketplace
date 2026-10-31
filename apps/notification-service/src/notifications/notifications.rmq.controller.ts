@@ -4,7 +4,7 @@ import { QUEUES } from '@workspace/contracts';
 import { NotificationsService } from './notifications.service';
 import type { NotificationPayload } from '@workspace/contracts';
 
-const MAX_ATTEMPTS = 5;
+const MAX_ATTEMPTS = 3;
 
 @Controller()
 export class NotificationsRmqController {
