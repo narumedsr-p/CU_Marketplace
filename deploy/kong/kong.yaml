@@ -17,7 +17,7 @@ metadata:
   namespace: cu-marketplace
 plugin: rate-limiting
 config:
-  minute: 100000
+  minute: 300
   policy: local
 ---
 apiVersion: configuration.konghq.com/v1
