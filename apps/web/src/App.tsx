@@ -181,7 +181,7 @@ export default function App() {
   const [reservations, setReservations] = useState<Record<string, SellerReservation>>(RESERVATIONS);
   const [alerts, setAlerts] = useState<AutoMatchAlert[]>([]);
   const [matchHits, setMatchHits] = useState<AutoMatchHit[]>([]);
-  const [matchLoading, setMatchLoading] = useState(false);
+  const [matchLoading, setMatchLoading] = useState(true);
   const [matchError, setMatchError] = useState<string | null>(null);
   const [profile, setProfile] = useState<AccountProfile>({ contact: '' });
   const [myReviews, setMyReviews] = useState<Review[]>([]);
@@ -249,6 +249,8 @@ export default function App() {
   };
 
   const loadMatchData = async (availableCategories: ApiCategory[]) => {
+    const ownerId = getCurrentUserId();
+    if (!ownerId) return;
     setMatchLoading(true);
     setMatchError(null);
     try {
@@ -266,6 +268,8 @@ export default function App() {
         await fetchListing(itemId, availableCategories).catch(() => null),
       ] as const));
       const listingsById = new Map(resolvedListings);
+
+      if (getCurrentUserId() !== ownerId) return;
 
       setAlerts(rules.map((rule: ApiMatchRule) => ({
         id: rule.id,
@@ -290,10 +294,11 @@ export default function App() {
         .filter((match): match is AutoMatchHit => match !== null)
         .sort((a, b) => b.matchedAt.localeCompare(a.matchedAt)));
     } catch (err) {
+      if (getCurrentUserId() !== ownerId) return;
       setMatchError('Could not load your auto-match alerts: ' + (err instanceof Error ? err.message : 'unknown error'));
       throw err;
     } finally {
-      setMatchLoading(false);
+      if (getCurrentUserId() === ownerId) setMatchLoading(false);
     }
   };
 
@@ -330,6 +335,15 @@ export default function App() {
     setMyReviews(reviews);
     setMyRating(rating);
   };
+
+  useEffect(() => {
+    if (!loggedIn) {
+      setAlerts([]);
+      setMatchHits([]);
+      setMatchError(null);
+      setMatchLoading(true);
+    }
+  }, [loggedIn]);
 
   useEffect(() => {
     onUnauthorized(() => {
@@ -953,6 +967,11 @@ export default function App() {
               onOpenListing={openListing}
               onPickCategory={(c) => { setQuery(''); navigate(`/browse?category=${encodeURIComponent(c)}`); }}
               onSeeAll={() => navigate('/browse')}
+              alerts={alerts} alertsLoading={matchLoading} alertsError={matchError}
+              onOpenAutoMatch={(id) => navigate(id === undefined
+                ? '/wishlist?tab=alerts'
+                : `/wishlist?tab=alerts&ruleId=${encodeURIComponent(String(id))}`)}
+              onNewAutoMatch={() => navigate('/wishlist?tab=alerts&new=1')}
             />
           )} />
 
@@ -1095,7 +1114,11 @@ export default function App() {
 
           <Route path="/wishlist" element={(
             <WishlistScreen
+              key={location.search}
               initialTab={new URLSearchParams(location.search).get('tab') === 'alerts' ? 'alerts' : 'saved'}
+              selectedAlertId={new URLSearchParams(location.search).get('ruleId') ?? undefined}
+              focusNewAlert={new URLSearchParams(location.search).get('new') === '1'}
+              onShowAllAlerts={() => navigate('/wishlist?tab=alerts')}
               saved={savedAll.filter((l) => l.status !== 'Sold')}
               alerts={alerts} matches={matchHits} categories={categoryNames}
               loading={wishlistLoading || matchLoading}
