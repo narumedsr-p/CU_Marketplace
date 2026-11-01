@@ -11,6 +11,7 @@ export default function GlobalStyles() {
         rel="stylesheet"
       />
       <style>{`
+        html, body { overscroll-behavior: none; }
         body { margin:0; background:${color.canvas}; font-family:${font};
                color:${color.ink}; -webkit-font-smoothing:antialiased; }
         * { box-sizing:border-box; }

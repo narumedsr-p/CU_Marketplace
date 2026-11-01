@@ -1,4 +1,4 @@
-import { useEffect, useState, type ChangeEvent } from 'react';
+import { useEffect, useRef, useState, type ChangeEvent } from 'react';
 import { color, font, labelStyle, card, pageTitle, pageSub, danger } from '../theme/tokens';
 import Field from '../components/Field';
 import Button from '../components/Button';
@@ -15,7 +15,8 @@ interface AccountScreenProps {
   deleteAccountError?: string | null;
   onClearDeleteAccountError?: () => void;
   onSaveProfile: (profile: AccountProfile) => void;
-  onChangePhoto: () => void;
+  onChangePhoto: (file: File) => void;
+  changingPhoto?: boolean;
   onLogout: () => void;
   onLogoutAll: () => void;
   onMyListings?: () => void;
@@ -26,11 +27,12 @@ interface AccountScreenProps {
 export default function AccountScreen({
   user, profile = { contact: '' }, sessions = [],
   listingSummary, openOrderRef, deletingAccount = false, deleteAccountError = null, onClearDeleteAccountError,
-  onSaveProfile, onChangePhoto, onLogout, onLogoutAll, onMyListings, onDeleteAccount,
+  onSaveProfile, onChangePhoto, changingPhoto = false, onLogout, onLogoutAll, onMyListings, onDeleteAccount,
 }: AccountScreenProps) {
   const [draft, setDraft] = useState(profile);
   const [delOpen, setDelOpen] = useState(false);
   const [confirmText, setConfirmText] = useState('');
+  const photoInputRef = useRef<HTMLInputElement>(null);
   useEffect(() => setDraft(profile), [profile]);
   const canDelete = confirmText === 'DELETE' && !openOrderRef && !deletingAccount;
 
@@ -46,7 +48,18 @@ export default function AccountScreen({
             <div style={{ display: 'flex', alignItems: 'center', gap: 14, marginTop: 14 }}>
               <Avatar name={user.name} src={user.photo} size={62} />
               <div>
-                <Button size="sm" variant="ghost" onClick={onChangePhoto}>Change photo</Button>
+                <input
+                  ref={photoInputRef} type="file" accept="image/*" hidden
+                  onChange={(e: ChangeEvent<HTMLInputElement>) => {
+                    const file = e.target.files?.[0];
+                    if (file) onChangePhoto(file);
+                    e.target.value = '';
+                  }}
+                />
+                <Button
+                  size="sm" variant="ghost" disabled={changingPhoto}
+                  onClick={() => photoInputRef.current?.click()}
+                >{changingPhoto ? 'Uploading…' : 'Change photo'}</Button>
                 <div style={{ font: `400 11.5px/1.5 ${font}`, color: color.faint, marginTop: 6 }}>JPG, PNG or WebP · max 5 MB</div>
               </div>
             </div>

@@ -34,12 +34,22 @@ export async function fetchSellerReviews(sellerId: string): Promise<Review[]> {
     return {
       id: review.id,
       name: reviewer?.displayName ?? 'CU member',
+      photo: reviewer?.avatarUrl,
       item: review.itemTitle || 'Verified completed purchase',
       when: reviewDate(review.createdAt),
       stars: review.rating,
       text: review.comment ?? '',
     };
   }));
+}
+
+// Used to figure out which of the current buyer's completed orders already have a
+// review, since the order list itself has no "rated" flag — only review-service does.
+export async function fetchReviewedOrderIds(sellerIds: string[]): Promise<Set<string>> {
+  const lists = await Promise.all(
+    sellerIds.map((id) => api<ApiReview[]>(`${REVIEWS}/users/${id}/reviews`).catch(() => [])),
+  );
+  return new Set(lists.flat().map((r) => r.orderId));
 }
 
 export async function fetchSellerRating(sellerId: string): Promise<SellerStats> {

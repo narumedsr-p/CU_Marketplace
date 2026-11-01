@@ -15,6 +15,7 @@ interface ReviewScreenProps {
   order: ReviewOrderSummary;
   sellerStats?: SellerStats;
   reviewerName?: string;
+  reviewerPhoto?: string;
   submitted?: boolean;
   submitting?: boolean;
   error?: string | null;
@@ -26,7 +27,7 @@ interface ReviewScreenProps {
 
 // Rate seller (FR 2.9, UC-02). 0–5 stars + text, buyer only, COMPLETED orders only.
 export default function ReviewScreen({
-  order, sellerStats = { avg: 0, count: 0 }, reviewerName = 'You', submitted,
+  order, sellerStats = { avg: 0, count: 0 }, reviewerName = 'You', reviewerPhoto, submitted,
   submitting = false, error = null, tags = TAGS,
   onSubmit, onGoHandover, onHome,
 }: ReviewScreenProps) {
@@ -122,7 +123,9 @@ export default function ReviewScreen({
           <div style={{ ...card, padding: 16 }}>
             <div style={labelStyle}>Seller today</div>
             <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginTop: 12 }}>
-              <div style={{ width: 44, height: 44, borderRadius: '50%', background: color.pinkLine, display: 'grid', placeItems: 'center', font: `700 14px/1 ${font}`, color: color.pink }}>{initialsOf(order.seller)}</div>
+              <div style={{ width: 44, height: 44, borderRadius: '50%', background: color.pinkLine, display: 'grid', placeItems: 'center', font: `700 14px/1 ${font}`, color: color.pink, overflow: 'hidden' }}>
+                {order.sellerPhoto ? <img src={order.sellerPhoto} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : initialsOf(order.seller)}
+              </div>
               <div>
                 <div style={{ font: `600 14px/1.3 ${font}` }}>{order.seller}</div>
                 <div style={{ font: `500 12.5px/1.4 ${font}`, color: color.muted, marginTop: 3 }}>
@@ -134,7 +137,9 @@ export default function ReviewScreen({
           <div style={{ ...card, padding: 16 }}>
             <div style={labelStyle}>Preview</div>
             <div style={{ display: 'flex', gap: 10, marginTop: 12 }}>
-              <div style={{ width: 32, height: 32, borderRadius: '50%', background: color.pinkLine, display: 'grid', placeItems: 'center', font: `700 11px/1 ${font}`, color: color.pink, flex: 'none' }}>{initialsOf(reviewerName)}</div>
+              <div style={{ width: 32, height: 32, borderRadius: '50%', background: color.pinkLine, display: 'grid', placeItems: 'center', font: `700 11px/1 ${font}`, color: color.pink, flex: 'none', overflow: 'hidden' }}>
+                {reviewerPhoto ? <img src={reviewerPhoto} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : initialsOf(reviewerName)}
+              </div>
               <div style={{ minWidth: 0 }}>
                 <div style={{ font: `600 13px/1.3 ${font}` }}>{shortName(reviewerName)}</div>
                 <div style={{ font: `400 13px/1 ${font}`, color: color.star, marginTop: 4, letterSpacing: 1 }}>

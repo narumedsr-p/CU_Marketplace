@@ -18,8 +18,10 @@ export default function SellerTrustCard({ seller, onView }: SellerTrustCardProps
         <div style={{
           width: 42, height: 42, borderRadius: '50%', background: color.pinkLine,
           display: 'grid', placeItems: 'center', font: `700 14px/1 ${font}`,
-          color: color.pink, flex: 'none',
-        }}>{initialsOf(seller.name)}</div>
+          color: color.pink, flex: 'none', overflow: 'hidden',
+        }}>
+          {seller.photo ? <img src={seller.photo} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : initialsOf(seller.name)}
+        </div>
 
         <div style={{ minWidth: 0 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>

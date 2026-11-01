@@ -29,6 +29,7 @@ import {
   markAllNotificationsRead as apiMarkAllNotificationsRead, markNotificationRead, updateNotificationPreferences,
 } from './api/notifications';
 import { createReview, fetchSellerRating, fetchSellerReviews } from './api/reviews';
+import { uploadPhoto, uploadPhotos, UploadError } from './api/uploads';
 
 
 import LoginScreen from './screens/LoginScreen';
@@ -52,7 +53,7 @@ import SellerProfileRoute from './routes/profile/SellerProfileRoute';
 import {
   CONDITIONS, FACULTIES, SPOTS,
   SESSIONS,
-  THREADS, RESERVATIONS,
+  THREADS,
 } from './data/mockListings';
 import type {
   AccountProfile, AutoMatchAlert, ChatThread, ChatThreadListing, CurrentUser,
@@ -98,6 +99,7 @@ function ListingRoute({
   useState(() => setSelectedId(id));
   const inList = listings.find((l) => l.id === id);
   const [fetched, setFetched] = useState<Listing | null | undefined>(undefined);
+  const [sellerPhoto, setSellerPhoto] = useState<string | undefined>(undefined);
 
   useEffect(() => {
     if (inList || !loaded) return;
@@ -106,6 +108,13 @@ function ListingRoute({
   }, [id, inList, loaded]);
 
   const listing = inList ?? fetched;
+
+  useEffect(() => {
+    setSellerPhoto(undefined);
+    if (!listing?.sellerId) return;
+    fetchProfile(listing.sellerId).then((p) => setSellerPhoto(p?.avatarUrl));
+  }, [listing?.sellerId]);
+
   if (!listing) {
     return loaded && fetched === null ? <Navigate to="/" replace /> : null;
   }
@@ -114,6 +123,7 @@ function ListingRoute({
     <ListingScreen
       key={`${listing.id}:${listing.status}`}
       listing={listing}
+      sellerPhoto={sellerPhoto}
       isOwner={!!listing.sellerId && listing.sellerId === getCurrentUserId()}
       isMyReservation={listing.status === 'Reserved' && !!myReservation}
       onViewMyOrder={() => { if (myReservation) navigate(`/orders/${myReservation.id}`); }}
@@ -143,6 +153,13 @@ const authRedirect = consumeAuthRedirect();
 export default function App() {
   const navigate = useNavigate();
   const location = useLocation();
+
+  // React Router doesn't reset scroll on navigation like a real page load would — without
+  // this, clicking into a new screen keeps whatever scroll position the previous one was
+  // left at. Keyed on pathname only, not the full location, so query-string-only changes
+  // within the same screen (e.g. /wishlist?tab=alerts) don't yank the scroll position.
+  useEffect(() => { window.scrollTo(0, 0); }, [location.pathname]);
+
   const [loggedIn, setLoggedIn] = useState(() => getToken() !== null);
   const [signingIn, setSigningIn] = useState(false);
 
@@ -160,14 +177,21 @@ export default function App() {
   const [wishlistLoading, setWishlistLoading] = useState(false);
   const [wishlistError, setWishlistError] = useState<string | null>(null);
   const [me, setMe] = useState<ApiProfile | null>(null);
+  const [changingPhoto, setChangingPhoto] = useState(false);
   const [prefs, setPrefs] = useState<NotificationPrefsState>({ inAppEnabled: true, emailEnabled: true });
   const [form, setForm] = useState<SellForm>(EMPTY_FORM);
+  const [sellPhotos, setSellPhotos] = useState<string[]>([]);
+  const [sellPhotosUploading, setSellPhotosUploading] = useState(false);
   const [rateOpen, setRateOpen] = useState(false);
 
   const [handover, setHandover] = useState<{
     role: 'buyer' | 'seller'; saleId: string | null; code: string | null; codeLoading: boolean;
+    qrImageDataUrl: string | null;
     stage: Record<'buyer' | 'seller', HandoverStage>; error: string | null;
-  }>({ role: 'buyer', saleId: null, code: null, codeLoading: false, stage: { buyer: 'ready', seller: 'ready' }, error: null });
+  }>({
+    role: 'buyer', saleId: null, code: null, codeLoading: false, qrImageDataUrl: null,
+    stage: { buyer: 'ready', seller: 'ready' }, error: null,
+  });
 
   const [threads, setThreads] = useState<ChatThread[]>(THREADS);
   const [activeThread, setActiveThread] = useState<number | string | null>(1);
@@ -178,7 +202,6 @@ export default function App() {
   const [preferencesError, setPreferencesError] = useState<string | null>(null);
   const [markingAllRead, setMarkingAllRead] = useState(false);
   const [savingPreferences, setSavingPreferences] = useState(false);
-  const [reservations, setReservations] = useState<Record<string, SellerReservation>>(RESERVATIONS);
   const [alerts, setAlerts] = useState<AutoMatchAlert[]>([]);
   const [matchHits, setMatchHits] = useState<AutoMatchHit[]>([]);
   const [matchLoading, setMatchLoading] = useState(true);
@@ -190,6 +213,7 @@ export default function App() {
   const [reviewSubmitting, setReviewSubmitting] = useState(false);
   const [reviewError, setReviewError] = useState<string | null>(null);
   const [reviewSubmitted, setReviewSubmitted] = useState(false);
+  const [reviewSellerPhoto, setReviewSellerPhoto] = useState<string | undefined>(undefined);
   const [deletingAccount, setDeletingAccount] = useState(false);
   const [deleteAccountError, setDeleteAccountError] = useState<string | null>(null);
   const deleteAccountPending = useRef(false);
@@ -405,6 +429,12 @@ export default function App() {
     return () => { cancelled = true; };
   }, [loggedIn, flash]);
 
+  useEffect(() => {
+    setReviewSellerPhoto(undefined);
+    if (!order?.sellerId) return;
+    fetchProfile(order.sellerId).then((p) => setReviewSellerPhoto(p?.avatarUrl));
+  }, [order?.sellerId]);
+
   const categoryNames = categories.map((c) => c.name);
   const categoryIdOf = (name: string) => categories.find((c) => c.name === name)?.id;
 
@@ -616,6 +646,19 @@ export default function App() {
     }
   };
 
+  // The QR encodes {orderId, buyerId, token} (see order-service's generateQRCode()),
+  // not the bare token — camera scans go through the same verifyHandoverCode() path
+  // as manual entry once the token is pulled out.
+  const scanHandoverQr = (payload: string) => {
+    try {
+      const { token } = JSON.parse(payload);
+      if (typeof token !== 'string') throw new Error();
+      void verifyHandoverCode(token);
+    } catch {
+      setHandover((h) => ({ ...h, error: 'That QR code is not a handover code for this order.' }));
+    }
+  };
+
   const markSale = (saleId: string, status: Sale['status']) => {
     setSales((ss) => ss.map((s) => (s.id === saleId ? {
       ...s, status, action: status === 'Completed' ? 'Sold' : status === 'Cancelled' ? 'Cancelled' : s.action,
@@ -685,7 +728,9 @@ export default function App() {
     if (!onHandoverPage || !handoverSaleId) return;
     let cancelled = false;
     getHandoverQr(handoverSaleId)
-      .then(({ token }) => { if (!cancelled) setHandover((h) => ({ ...h, code: token, codeLoading: false })); })
+      .then(({ token, qrImageDataUrl }) => {
+        if (!cancelled) setHandover((h) => ({ ...h, code: token, qrImageDataUrl, codeLoading: false }));
+      })
       .catch((err) => {
         if (!cancelled) {
           setHandover((h) => ({
@@ -709,6 +754,35 @@ export default function App() {
     return () => { cancelled = true; clearInterval(poll); };
   }, [onHandoverPage, handoverSaleId]);
 
+  const pickSellPhotos = async (files: File[]) => {
+    setSellPhotosUploading(true);
+    try {
+      const uploaded = await uploadPhotos(files, sellPhotos.length);
+      setSellPhotos((p) => [...p, ...uploaded]);
+    } catch (err) {
+      flash(err instanceof UploadError ? err.message : 'Could not upload the photo.');
+    } finally {
+      setSellPhotosUploading(false);
+    }
+  };
+
+  const removeSellPhoto = (index: number) => {
+    setSellPhotos((p) => p.filter((_, i) => i !== index));
+  };
+
+  const changeAccountPhoto = async (file: File) => {
+    setChangingPhoto(true);
+    try {
+      const path = await uploadPhoto(file);
+      setMe(await updateMyProfile({ avatarUrl: path }));
+      flash('Photo updated.');
+    } catch (err) {
+      flash(err instanceof UploadError ? err.message : 'Could not update the photo.');
+    } finally {
+      setChangingPhoto(false);
+    }
+  };
+
   const publish = async () => {
     if (!form.title.trim() || !form.price) { flash('Title and price are required.'); return; }
     const categoryId = categoryIdOf(form.cat);
@@ -725,9 +799,11 @@ export default function App() {
         categoryId,
         condition: form.cond,
         handoverSpot: form.spot,
+        imageUrls: sellPhotos,
       }, categories);
       setListings((ls) => [listing, ...ls]);
       setForm(EMPTY_FORM);
+      setSellPhotos([]);
       navigate('/listing/' + listing.id);
       flash('Published.');
     } catch (err) {
@@ -863,30 +939,43 @@ export default function App() {
     ? toUser(me)
     : { id: currentUserId ?? '', name: '', memberType: 'Student', faculty: '', joined: '' };
   const mine = listings.filter((l) => l.sellerId === currentUserId);
+  // Was seeded from mock data and never updated with anything real — a buyer actually
+  // reserving your listing never showed up here. Derive it from the same `sales` data
+  // MyListingsScreen already gets elsewhere instead. `window` isn't tracked as real data
+  // anywhere in this app yet (the handover screens show the same '—' placeholder for it).
+  const reservations: Record<string, SellerReservation> = Object.fromEntries(
+    sales.filter((s) => s.status === 'Reserved').map((s) => [
+      s.listingId,
+      { buyer: s.buyer, reference: 'ORD-' + s.id.slice(-8).toUpperCase(), window: '—', spot: s.spot },
+    ]),
+  );
   const purchases: Purchase[] = orders.map((o) => ({
     id: o.id, title: o.title, price: o.price, seller: o.seller, when: o.placedAt, status: o.status, spot: o.spot,
-    action: o.status === 'Completed' ? 'Rate seller' : o.status === 'Reserved' ? 'In progress' : 'Cancelled',
+    rated: o.rated,
+    action: o.status === 'Completed' ? (o.rated ? 'Rated' : 'Awaiting your review') : o.status === 'Reserved' ? 'In progress' : 'Cancelled',
   }));
   const activeSale = sales.find((item) => item.status === 'Reserved');
   const openOrderRef = orders.find((item) => item.status === 'Reserved')?.reference
-    ?? (activeSale ? `ORD-${activeSale.id.slice(0, 8).toUpperCase()}` : null);
+    ?? (activeSale ? `ORD-${activeSale.id.slice(-8).toUpperCase()}` : null);
   const savedAll = listings.filter((l) => wishIds.includes(l.id));
 
   const buyerHandover: HandoverOrder | null = order ? {
-    reference: order.reference, handoverCode: order.handoverCode, title: order.title,
+    reference: order.reference, handoverCode: order.handoverCode, title: order.title, photo: order.photo,
     price: order.price, seller: order.seller, buyer: currentUser.name, spot: order.spot, window: order.window,
   } : null;
   const sellerSale = sales.find((s) => s.id === handover.saleId);
   const sellerHandover: HandoverOrder | null = sellerSale ? {
-    reference: 'ORD-' + sellerSale.id.slice(0, 8).toUpperCase(),
+    reference: 'ORD-' + sellerSale.id.slice(-8).toUpperCase(),
     handoverCode: handover.code ? formatHandoverCode(handover.code) : '', title: sellerSale.title,
+    photo: sellerSale.photo, qrImageDataUrl: handover.qrImageDataUrl ?? undefined,
     price: sellerSale.price, seller: currentUser.name, buyer: sellerSale.buyer, spot: sellerSale.spot, window: '—',
   } : null;
 
   const reviewOrder = order
     ? {
       orderId: order.id, sellerId: order.sellerId, title: order.title, price: order.price,
-      seller: order.seller, when: order.status === 'Completed' ? 'Today' : order.window, status: order.status,
+      seller: order.seller, sellerPhoto: reviewSellerPhoto,
+      when: order.status === 'Completed' ? 'Today' : order.window, status: order.status,
     }
     : null;
 
@@ -894,7 +983,7 @@ export default function App() {
     return (
       <>
         <GlobalStyles />
-        <AppShell>
+        <AppShell centered>
           <LoginScreen onSignIn={handleSignIn} signingIn={signingIn} />
         </AppShell>
         <Toast message={toast} />
@@ -905,7 +994,10 @@ export default function App() {
   const orderProps = {
     order,
     onScanQr: () => openBuyerHandover(),
-    onChat: () => { const l = listings.find((x) => x.id === order?.listingId); if (l) openChat(l); },
+    // Not listings.find(): the item is Reserved/Sold for every active order (that's
+    // why there's an order on it), so it's never in the Available-only catalog list
+    // openChat() only reads sellerId/id off this, both already on the order itself.
+    onChat: () => { if (order) openChat({ id: order.listingId, sellerId: order.sellerId } as Listing); },
     onCancel: () => { if (order) cancelOrder(order); },
     onRate: () => { if (order && selectReviewOrder(order)) setRateOpen(true); },
     onBrowse: () => navigate('/'),
@@ -916,7 +1008,7 @@ export default function App() {
       isSelf
       initialTab={new URLSearchParams(location.search).get('tab') ?? undefined}
       focusReviewId={new URLSearchParams(location.search).get('reviewId') ?? undefined}
-      user={currentUser}
+      user={{ ...currentUser, photo: me?.avatarUrl }}
       stats={[
         ['SELLER RATING', `${myRating.avg.toFixed(1)} ★`],
         ['ACTIVE LISTINGS', mine.filter((l) => l.status === 'Available').length],
@@ -925,6 +1017,10 @@ export default function App() {
       ]}
       listings={mine}
       purchases={purchases}
+      onRatePurchase={(id) => {
+        const o = orders.find((x) => x.id === id);
+        if (o && selectReviewOrder(o)) setRateOpen(true);
+      }}
       sales={sales}
       onShowHandoverCode={(sale) => openSellerHandover(sale.id)}
       reviews={myReviews}
@@ -999,7 +1095,8 @@ export default function App() {
             <SellScreen
               form={form} onChange={setForm} onPublish={publish}
               categories={categoryNames} conditions={CONDITIONS} spots={SPOTS}
-              onAddPhoto={() => flash('Photo picker — max 6, 5MB each.')}
+              photos={sellPhotos} photosUploading={sellPhotosUploading}
+              onPickPhotos={pickSellPhotos} onRemovePhoto={removeSellPhoto}
             />
           )} />
 
@@ -1013,7 +1110,7 @@ export default function App() {
               sales={sales}
               currentUserId={currentUser.id}
               onScanQr={(o) => openBuyerHandover(o)}
-              onChat={(o) => { const l = listings.find((x) => x.id === o.listingId); if (l) openChat(l); }}
+              onChat={(o) => openChat({ id: o.listingId, sellerId: o.sellerId } as Listing)}
               onCancel={cancelOrder}
               onRate={(o) => { if (selectReviewOrder(o)) setRateOpen(true); }}
               onShowSellerQr={(sale) => openSellerHandover(sale.id)}
@@ -1033,6 +1130,7 @@ export default function App() {
                 codeLoading={isSeller ? handover.codeLoading : false}
                 onRoleChange={sellerHandover && buyerHandover ? (r) => setHandover((h) => ({ ...h, role: r, error: null })) : undefined}
                 onVerifyCode={verifyHandoverCode}
+                onScanToken={scanHandoverQr}
                 onCancelReservation={isSeller && sellerSale?.status === 'Reserved' ? () => cancelSale(sellerSale.id) : undefined}
                 onChat={() => navigate('/chat')}
                 onRate={() => { if (order && selectReviewOrder(order)) navigate('/review'); }}
@@ -1045,6 +1143,7 @@ export default function App() {
             <ReviewScreen
               order={reviewOrder}
               reviewerName={currentUser.name}
+              reviewerPhoto={currentUser.photo}
               sellerStats={reviewStats}
               submitted={reviewSubmitted || order?.rated}
               submitting={reviewSubmitting}
@@ -1069,7 +1168,7 @@ export default function App() {
               onEditProfile={() => navigate('/account')}
               onWishlist={() => navigate('/wishlist')}
               onSell={() => navigate('/sell')}
-              onChat={(name) => { const l = listings.find((x) => x.seller === name); if (l) openChat(l); }}
+              onChat={(sellerId, itemId) => openChat({ id: itemId, sellerId } as Listing)}
               onOpenListing={openListing}
             />
           )} />
@@ -1088,7 +1187,10 @@ export default function App() {
 
           <Route path="/account" element={(
             <AccountScreen
-              user={{ name: currentUser.name, memberType: currentUser.memberType, faculty: currentUser.faculty, email: getCurrentClaims()?.email ?? '' }}
+              user={{
+                name: currentUser.name, memberType: currentUser.memberType, faculty: currentUser.faculty,
+                email: getCurrentClaims()?.email ?? '', photo: me?.avatarUrl,
+              }}
               profile={profile} sessions={SESSIONS}
               listingSummary={`${mine.filter((l) => l.status === 'Available').length} active · ${mine.filter((l) => l.status === 'Reserved').length} reserved · ${mine.filter((l) => l.status === 'Sold').length} sold`}
               openOrderRef={openOrderRef}
@@ -1104,7 +1206,7 @@ export default function App() {
                   flash('Could not save profile: ' + (err instanceof Error ? err.message : 'unknown error'));
                 }
               }}
-              onChangePhoto={() => flash('Photo picker — replaces the directory photo.')}
+              onChangePhoto={changeAccountPhoto} changingPhoto={changingPhoto}
               onLogout={() => logout('Signed out.')}
               onLogoutAll={() => logout('Signed out on all devices.')}
               onMyListings={() => navigate('/mylistings')}

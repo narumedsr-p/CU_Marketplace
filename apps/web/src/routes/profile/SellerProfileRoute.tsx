@@ -6,12 +6,15 @@ import { memberSince, type ApiProfile } from '../../api/profiles';
 import type { Listing, Review, SellerStats } from '../../types';
 
 export interface SellerProfileRouteProps
-  extends Omit<ComponentProps<typeof ProfileScreen>, 'isSelf' | 'user' | 'stats' | 'listings' | 'reviews' | 'onChat'> {
+  extends Omit<ComponentProps<typeof ProfileScreen>, 'isSelf' | 'user' | 'stats' | 'listings' | 'reviews' | 'onChat' | 'canChat'> {
   listings: Listing[];
   loadProfile: (userId: string) => Promise<ApiProfile | null>;
   loadReviews: (userId: string) => Promise<Review[]>;
   loadRating: (userId: string) => Promise<SellerStats>;
-  onChat: (sellerName: string) => void;
+  // Chat rooms are scoped to a specific item — hand back the real sellerId + one of
+  // their actual listing ids, not a display name (two sellers can share a name, and a
+  // name can't be reversed back into a listing reliably).
+  onChat: (sellerId: string, itemId: string) => void;
 }
 
 export default function SellerProfileRoute({
@@ -50,7 +53,7 @@ export default function SellerProfileRoute({
       key={userId}
       {...props}
       isSelf={false}
-      user={{ name: profile.displayName, memberType: profile.role, faculty: '', since }}
+      user={{ name: profile.displayName, memberType: profile.role, faculty: '', since, photo: profile.avatarUrl }}
       stats={[
         ['SELLER RATING', `${rating.avg.toFixed(1)} ★`],
         ['ACTIVE LISTINGS', sellerListings.filter((l) => l.status === 'Available').length],
@@ -59,7 +62,8 @@ export default function SellerProfileRoute({
       ]}
       listings={sellerListings}
       reviews={reviews}
-      onChat={() => onChat(profile.displayName)}
+      canChat={sellerListings.length > 0}
+      onChat={() => { if (sellerListings[0]) onChat(userId, sellerListings[0].id); }}
     />
   );
 }

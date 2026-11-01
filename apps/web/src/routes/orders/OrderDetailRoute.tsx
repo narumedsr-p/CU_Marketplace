@@ -4,6 +4,7 @@ import OrderScreen from '../../screens/OrderScreen';
 import EmptyState from '../../components/EmptyState';
 import StatusBadge from '../../components/StatusBadge';
 import Button from '../../components/Button';
+import PhotoSlot from '../../components/PhotoSlot';
 import { baht, color, font } from '../../theme/tokens';
 import { fetchOrderDetail, toOrder, type ApiOrder } from '../../api/orders';
 import type { Order, Sale } from '../../types';
@@ -43,17 +44,23 @@ export default function OrderDetailRoute({
   if (isSeller) {
     const status = detail?.status === 'Pending' ? 'Reserved' : detail?.status ?? sale?.status ?? 'Reserved';
     const title = detail?.itemTitle || sale?.title || 'Unavailable item';
+    const photo = detail?.itemImageUrl ?? undefined;
     const price = detail ? Number(detail.agreedPrice) : sale?.price ?? 0;
     return (
       <div style={{ padding: '24px', maxWidth: 760 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-          <div style={{ font: `700 22px/1.2 ${font}` }}>Order ORD-{orderId.slice(0, 8).toUpperCase()}</div>
+          <div style={{ font: `700 22px/1.2 ${font}` }}>Order ORD-{orderId.slice(-8).toUpperCase()}</div>
           <StatusBadge status={status} />
         </div>
         <div style={{ border: `1px solid ${color.line}`, borderRadius: 12, padding: 18, marginTop: 20 }}>
-          <div style={{ font: `600 16px/1.4 ${font}` }}>{title}</div>
-          <div style={{ font: `700 19px/1.4 ${font}`, color: color.pink, marginTop: 6 }}>{baht(price)}</div>
-          {sale && <div style={{ font: `500 13px/1.5 ${font}`, color: color.muted, marginTop: 6 }}>Buyer {sale.buyer}</div>}
+          <div style={{ display: 'flex', gap: 14 }}>
+            <PhotoSlot src={photo} label="" radius={9} style={{ width: 88, flex: 'none' }} />
+            <div style={{ minWidth: 0 }}>
+              <div style={{ font: `600 16px/1.4 ${font}` }}>{title}</div>
+              <div style={{ font: `700 19px/1.4 ${font}`, color: color.pink, marginTop: 6 }}>{baht(price)}</div>
+              {sale && <div style={{ font: `500 13px/1.5 ${font}`, color: color.muted, marginTop: 6 }}>Buyer {sale.buyer}</div>}
+            </div>
+          </div>
           {status === 'Reserved' && sale && (
             <div style={{ display: 'flex', gap: 8, marginTop: 16 }}>
               <Button size="sm" onClick={() => onShowSellerQr(sale)}>Show handover QR</Button>

@@ -1,214 +1,147 @@
 # Deploy
 
-Runs CU Marketplace on Kubernetes behind Kong Ingress, replacing the old hand-rolled
-`api-gateway`. See the migration plan for why; this file just covers how to run it.
+`kind` locally, `k3s` on a real box — same images, same manifests, same
+`deploy/secrets.prod.env` on both (so OAuth and everything else stays identical no
+matter which cluster you're pointed at). For regular coding, skip all this: `docker
+compose up -d` + `pnpm dev` already works, see the root README's
+[Setup](../README.md#setup).
 
-This is for testing the real deployment (kind locally, k3s on EC2), not day-to-day coding.
-For that, `docker compose up -d` + `pnpm dev` already includes a plain Kong container
-(config in `deploy/kong/local.yml`) with the same auth setup, no k8s or Docker builds of
-the app images required; see the root README's [Setup](../README.md#setup).
-
-## Layout
-
-```
-deploy/
-  docker/      Dockerfiles (shared across all 7 NestJS services + one for the web frontend)
-  k8s/         Deployment + Service per app, plus Postgres/Mongo/RabbitMQ as StatefulSets (with PVCs)
-  kong/        Helm values + Kong's routing/auth config (Ingress, jwt plugin, consumer)
-  secrets.env  The one file every secret value comes from
-  apply.sh     Fills in secrets.env and applies everything, in the right order
-```
-
-Postgres, Mongo, and RabbitMQ run inside k8s, backed by PersistentVolumeClaims, so data
-survives pod restarts. The same manifests run on a local `kind` cluster and on `k3s` (the
-EC2 target); only `secrets.env` changes between the two.
-
-Every secret value (JWT secret, DB passwords, Google OAuth credentials) lives in
-`secrets.env` exactly once. `deploy/k8s/setup-dev.yaml` and `deploy/kong/kong.yaml` both
-reference the same values (`${JWT_SECRET}`, `${POSTGRES_PASSWORD}`, and so on) instead of
-hardcoding them twice, since Kong's JWT credential has to match whatever `profile-service`
-signs tokens with. `apply.sh` fills those placeholders in with `envsubst` before calling
-`kubectl apply`, so the values only ever get typed once.
-
-`apply.sh` only falls back to `secrets.env` when the current kubectl context looks like a
-local `kind` cluster (its name starts with `kind-`). Anywhere else, it refuses to run unless
-you pass a secrets file explicitly, so dev placeholders can't end up on a real deployment
-just because someone forgot the argument.
-
-For day-to-day coding without a cluster, `docker compose up -d` + `pnpm dev` still works
-as before.
-
-## Running it locally with kind
-
-### 1. Build the images
-
-Run this from the repo root: turbo prune needs the full workspace as build context.
+## First-time setup (kind)
 
 ```bash
 ./deploy/docker/build-all.sh
-```
 
-That builds all 7 services plus the web image in one go (tagged `:latest` by default; pass
-a different tag as the first argument, e.g. `./deploy/docker/build-all.sh v1.2.3`). To build
-a single service by hand instead:
-
-```bash
-docker build -f deploy/docker/Dockerfile.service --build-arg APP_NAME=catalog-service -t cu-marketplace/catalog-service:latest .
-```
-
-`:latest` is a placeholder. Once there's a real CI/registry pipeline on ECR, tag each build
-properly (the git SHA works well) and update the `image:` lines in `deploy/k8s/*.yaml` to
-match.
-
-### 2. Create the cluster and deploy
-
-```bash
 kind create cluster
 kind load docker-image cu-marketplace/catalog-service:latest cu-marketplace/order-service:latest \
   cu-marketplace/chat-service:latest cu-marketplace/wishlist-service:latest \
   cu-marketplace/review-service:latest cu-marketplace/profile-service:latest \
   cu-marketplace/notification-service:latest cu-marketplace/web:latest
 
-./deploy/apply.sh
-```
-
-`apply.sh` reads `deploy/secrets.env`, substitutes those values into
-`deploy/k8s/setup-dev.yaml` and `deploy/kong/kong.yaml`, and applies everything in order:
-the namespace and Secret first, then Postgres/Mongo/RabbitMQ (StatefulSets) and the 8 app
-Deployments, then the Kong Helm install, then Kong's routing and auth config.
-
-Kong's proxy listens on NodePort `30080` (see `values.yaml`). `kind` doesn't expose
-NodePorts to the host on its own, so port-forward it in a separate terminal:
-
-```bash
-kubectl port-forward -n cu-marketplace svc/kong-gateway-proxy 30080:80
-```
-
-Leave that running; it's what makes `localhost:30080` reachable below.
-
-### 3. Verify the auth design
-
-```bash
-# No token -> Kong's jwt plugin rejects it before the request ever reaches catalog-service
-curl -i http://localhost:30080/api/v1/catalog/anything        # expect 401
-
-# A valid token (signed with the JWT_SECRET/JWT_ISSUER from deploy/secrets.env)
-# passes Kong and reaches catalog-service with X-User-Id/X-User-Role/X-Internal-Key set
-curl -i http://localhost:30080/api/v1/catalog/anything -H "Authorization: Bearer <token>"
-```
-
-## Deploying to EC2
-
-The images, manifests, and Helm install don't change; only the cluster and the secrets do.
-Run `k3s` instead of `kind`, and make a real, untracked copy of `secrets.env` (never commit
-it) with real passwords, a real `GOOGLE_CLIENT_ID`/`GOOGLE_CLIENT_SECRET`, and real callback
-and frontend URLs. `apply.sh` takes that file as an optional argument. `k3s` ships with the
-`local-path` StorageClass by default, which is enough for the PVCs; no external volume
-provisioner is needed.
-
-On the EC2 instance:
-
-```bash
-# install k3s (single node is enough for this setup)
-curl -sfL https://get.k3s.io | sh -
-export KUBECONFIG=/etc/rancher/k3s/k3s.yaml
-
-# build directly on the instance for now (swap for a registry pull once there's a
-# real CI/registry pipeline on ECR, see the build step above)
-./deploy/docker/build-all.sh
-
-cp deploy/secrets.env deploy/secrets.prod.env   # fill this in with real values, don't commit it
 ./deploy/apply.sh deploy/secrets.prod.env
+kubectl port-forward -n cu-marketplace svc/kong-gateway-proxy 30080:80   # own terminal, keep running
 ```
 
-Then open Kong's NodePort (`30080`, see `values.yaml`) in the EC2 instance's security
-group so traffic can reach it from outside.
+No `secrets.prod.env` yet? `cp deploy/secrets.env deploy/secrets.prod.env` and fill in
+real values — never commit this file.
 
-This sequence hasn't been run against a real EC2 instance yet; treat it as a starting point
-and adjust if something doesn't match your instance's setup.
+Google login: in `deploy/secrets.prod.env` set `GOOGLE_CALLBACK_URL` and
+`FRONTEND_URL` to `localhost:30080`, then add
+`http://localhost:30080/auth/google/callback` to the OAuth client's Authorized
+redirect URIs in Google Cloud Console.
 
-## Initialize the PostgreSQL databases
-
-The Postgres StatefulSet creates databases, but does not create Prisma tables. On a
-fresh cluster, apply migrations for **all five** PostgreSQL services: Catalog, Order,
-Wishlist, Review, and Profile. Without them, sign-in can return `service_unavailable`
-and initial page requests return HTTP 500 because the required tables do not exist.
-
-Run the Prisma CLI from the development checkout (the production image excludes it).
-In one terminal, forward the cluster's Postgres port:
+**Create the tables** (first time only, or on a fresh database — skip this and sign-in
+fails with `service_unavailable`):
 
 ```bash
-kubectl port-forward -n cu-marketplace svc/postgres 15432:5432
+kubectl port-forward -n cu-marketplace svc/postgres 15432:5432   # another terminal, keep running
 ```
 
-In another terminal, set the database URLs below to the forwarded databases, using
-the cluster's actual Postgres password (URL-encoded if necessary). For example, Profile
-uses `postgresql://postgres:<URL-encoded-password>@127.0.0.1:15432/cu_profile_db?schema=public`.
-Run each service's migration against its own database:
-
-| Service | Environment variable | Database |
-| --- | --- | --- |
-| catalog-service | CATALOG_DATABASE_URL | cu_catalog_db |
-| order-service | ORDER_DATABASE_URL | cu_order_db |
-| wishlist-service | WISHLIST_DATABASE_URL | cu_wishlist_db |
-| review-service | REVIEW_DATABASE_URL | cu_review_db |
-| profile-service | PROFILE_DATABASE_URL | cu_profile_db |
-
-After exporting those URLs in the terminal:
-
 ```bash
+export CATALOG_DATABASE_URL="postgresql://postgres:devpassword@127.0.0.1:15432/cu_catalog_db?schema=public"
+export ORDER_DATABASE_URL="postgresql://postgres:devpassword@127.0.0.1:15432/cu_order_db?schema=public"
+export WISHLIST_DATABASE_URL="postgresql://postgres:devpassword@127.0.0.1:15432/cu_wishlist_db?schema=public"
+export REVIEW_DATABASE_URL="postgresql://postgres:devpassword@127.0.0.1:15432/cu_review_db?schema=public"
+export PROFILE_DATABASE_URL="postgresql://postgres:devpassword@127.0.0.1:15432/cu_profile_db?schema=public"
+
 for svc in catalog-service order-service wishlist-service review-service profile-service; do
   pnpm --filter "$svc" exec prisma migrate deploy || break
 done
 ```
 
-This adds the tables, migration history, and seven standard Catalog categories without
-rebuilding app images. It does not add demo listings, accounts, orders, or reviews.
-For an existing database that already contains tables, verify its schema and baseline
-the relevant initial migration instead of trying to create the tables again. A database
-that already applied the Catalog/Wishlist trigram migrations must likewise baseline the
-new, earlier initial migration after verifying the original tables exist.
+**Set up Garage** (photo storage, first time only):
 
-## Redeploying after a change
+```bash
+kubectl exec -n cu-marketplace garage-0 -- /garage node id -q
+# copy the id before the @, then:
+kubectl exec -n cu-marketplace garage-0 -- /garage layout assign -z dc1 -c 2GB <node-id>
+kubectl exec -n cu-marketplace garage-0 -- /garage layout apply --version 1
+kubectl exec -n cu-marketplace garage-0 -- /garage bucket create cu-marketplace-images
+kubectl exec -n cu-marketplace garage-0 -- /garage key import <GARAGE_ACCESS_KEY> <GARAGE_SECRET_KEY> -n catalog-uploader --yes
+kubectl exec -n cu-marketplace garage-0 -- /garage bucket allow --read --write cu-marketplace-images --key catalog-uploader
+```
 
-`apply.sh` covers config changes: edit anything in `k8s/` or `kong/` and rerun it.
-`kubectl apply` and `helm upgrade --install` only touch what actually changed.
+`<GARAGE_ACCESS_KEY>`/`<GARAGE_SECRET_KEY>` must match your secrets file exactly
+(`GK` + 24 hex chars / 64 hex chars — `openssl rand -hex 12` / `openssl rand -hex 32`).
 
-Code changes need more than that. The image tag stays `:latest`, so the Deployment's YAML
-never changes text, and `kubectl apply` sees no diff to act on, even after you rebuild the
-image with new code inside it. Rebuild, reload the image into the cluster, and restart the
-pod by hand:
+## k3s (real box)
+
+```bash
+curl -sfL https://get.k3s.io | sh -
+export KUBECONFIG=/etc/rancher/k3s/k3s.yaml
+
+./deploy/docker/build-all.sh
+docker save cu-marketplace/catalog-service:latest cu-marketplace/order-service:latest \
+  cu-marketplace/chat-service:latest cu-marketplace/wishlist-service:latest \
+  cu-marketplace/review-service:latest cu-marketplace/profile-service:latest \
+  cu-marketplace/notification-service:latest cu-marketplace/web:latest \
+  | sudo k3s ctr images import -
+
+cp deploy/secrets.env deploy/secrets.prod.env   # fill in real passwords/OAuth values, never commit this
+./deploy/apply.sh deploy/secrets.prod.env
+```
+
+Open NodePort `30080` in the box's firewall. Set `GOOGLE_CALLBACK_URL`/`FRONTEND_URL`
+in `secrets.prod.env` to the box's real address, then register the callback URL in
+Google Cloud Console same as above. Tables and Garage setup: same commands as kind,
+just port-forward to this box instead of localhost. Not yet run against a real EC2 box
+— treat as a starting point.
+
+## After a change — what to type
+
+### Only `k8s/*.yaml` or `kong/*.yaml` changed
+
+```bash
+./deploy/apply.sh deploy/secrets.prod.env
+```
+
+### App code changed (image tag stays `:latest`, so you must reload it yourself)
 
 ```bash
 ./deploy/docker/build-all.sh
-kind load docker-image cu-marketplace/catalog-service:latest
+
+# kind:
+kind load docker-image cu-marketplace/catalog-service:latest   # whichever service you touched
+kubectl rollout restart deployment -n cu-marketplace catalog-service
+
+# k3s:
+docker save cu-marketplace/catalog-service:latest | sudo k3s ctr images import -
 kubectl rollout restart deployment -n cu-marketplace catalog-service
 ```
 
-Swap in whichever service you actually changed. Running `./deploy/apply.sh` afterward
-doesn't hurt, but it won't do this part for you.
-
-To redeploy every service at once instead of picking one:
+Touched more than one service (e.g. the shared `contracts` package)? `build-all.sh`
+already rebuilt all 8 images — load/import and restart all of them the same way, then
+restart everything at once instead of one at a time:
 
 ```bash
-./deploy/docker/build-all.sh
-
-kind load docker-image cu-marketplace/catalog-service:latest cu-marketplace/order-service:latest \
-  cu-marketplace/chat-service:latest cu-marketplace/wishlist-service:latest \
-  cu-marketplace/review-service:latest cu-marketplace/profile-service:latest \
-  cu-marketplace/notification-service:latest cu-marketplace/web:latest
-
 kubectl rollout restart deployment -n cu-marketplace \
   catalog-service order-service chat-service wishlist-service \
   review-service profile-service notification-service web
 ```
 
-That list leaves out Postgres, Mongo, and RabbitMQ on purpose: their code never changes,
-so there's nothing in them to redeploy.
+### `secrets.prod.env` changed
 
-## Status
+Pods only read secrets at startup, so update the Secret, then restart everything that
+reads it:
 
-`Dockerfile.service` is validated: it built and ran `profile-service` standalone.
-Everything else is still pending: building the other six service images, standing up a kind
-cluster, and installing Kong. The host ran out of disk space mid-build, and Docker Desktop
-needs that fixed before any of this can be tested.
+```bash
+./deploy/apply.sh deploy/secrets.prod.env
+
+kubectl rollout restart deployment -n cu-marketplace \
+  catalog-service order-service chat-service wishlist-service \
+  review-service profile-service notification-service kong-gateway
+```
+
+`web` is left out on purpose — it doesn't read `app-secrets`. Changing `JWT_SECRET`
+logs everyone out (every old token stops working). Changing `GOOGLE_CALLBACK_URL`
+needs a matching update in Google Cloud Console too; `FRONTEND_URL` doesn't.
+
+## Seed demo data
+
+```bash
+kubectl exec -i -n cu-marketplace postgres-0 -- psql -U postgres < scripts/dev-seed.sql
+```
+
+Safe to run anytime, as many times as you want — every insert is `ON CONFLICT DO
+NOTHING`. Wait until every pod shows `Running` (`kubectl get pods -n cu-marketplace`)
+first. Only regenerate the file (`node scripts/generate-seed.mjs`) if you actually want
+different demo data — it's deterministic, so a plain re-run produces the same file.

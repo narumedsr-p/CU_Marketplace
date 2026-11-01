@@ -1,10 +1,10 @@
-import { useState, type FormEvent, type ReactNode, type ChangeEvent } from 'react';
+import { useEffect, useRef, useState, type FormEvent, type ReactNode, type ChangeEvent } from 'react';
+import QrScanner from 'qr-scanner';
 import { color, font, baht, labelStyle, card, pageTitle, pageSub, shortName } from '../theme/tokens';
 import Segmented from '../components/Segmented';
 import Button from '../components/Button';
 import Checkbox from '../components/Checkbox';
 import PhotoSlot from '../components/PhotoSlot';
-import HandoverQr from '../components/HandoverQr';
 import type { HandoverOrder, HandoverRole, HandoverStage } from '../types';
 
 const CHECKS: Record<HandoverRole, string[]> = {
@@ -20,6 +20,7 @@ interface HandoverScreenProps {
   error?: string | null;
   codeLoading?: boolean;
   onVerifyCode: (code: string) => void;
+  onScanToken?: (payload: string) => void;
   onCancelReservation?: () => void;
   onChat: () => void;
   onRate: () => void;
@@ -29,13 +30,34 @@ interface HandoverScreenProps {
 // QR handover (FR 2.3–2.5). The SELLER shows the QR; the BUYER scans it.
 export default function HandoverScreen({
   role = 'buyer', onRoleChange, order, stage = 'ready', error, codeLoading,
-  onVerifyCode, onCancelReservation, onChat, onRate, onHome,
+  onVerifyCode, onScanToken, onCancelReservation, onChat, onRate, onHome,
 }: HandoverScreenProps) {
   const [code, setCode] = useState('');
   const [checks, setChecks] = useState([false, false, false]);
+  const [cameraError, setCameraError] = useState<string | null>(null);
+  const videoRef = useRef<HTMLVideoElement>(null);
   const isSeller = role === 'seller';
   const done = stage === 'done';
   const verifying = stage === 'verifying';
+  const scanning = !isSeller && !done && !verifying && !!onScanToken;
+
+  // Live camera scan, not a decorative viewfinder: starts a real video feed while the
+  // buyer is actively waiting to scan, and tears it down the moment that stops being
+  // true (sale completed, code submitted, or leaving the page) so the camera light
+  // doesn't stay on in the background.
+  useEffect(() => {
+    if (!scanning || !videoRef.current) return;
+    setCameraError(null);
+    const scanner = new QrScanner(
+      videoRef.current,
+      (result) => onScanToken!(result.data),
+      { highlightScanRegion: false, highlightCodeOutline: false, returnDetailedScanResult: true },
+    );
+    scanner.start().catch(() => {
+      setCameraError('Could not open the camera. Check camera permission, or enter the code below instead.');
+    });
+    return () => { scanner.stop(); scanner.destroy(); };
+  }, [scanning, onScanToken]);
 
   const doneBlock = (title: string, body: string, actions?: ReactNode) => (
     <div style={{ padding: '26px 6px', textAlign: 'center' }}>
@@ -75,8 +97,15 @@ export default function HandoverScreen({
                 <div style={{ font: `500 13px/1.6 ${font}`, color: '#A11B3C', padding: '28px 0' }}>{error}</div>
               ) : (
                 <>
-                  <div style={{ marginTop: 14 }}>
-                    <HandoverQr code={order.handoverCode} />
+                  <div style={{
+                    marginTop: 14, maxWidth: 250, margin: '14px auto 0', padding: 14, borderRadius: 12,
+                    background: color.white, border: '1px solid ' + color.line,
+                  }}>
+                    {order.qrImageDataUrl ? (
+                      <img src={order.qrImageDataUrl} alt={'Handover QR for ' + order.handoverCode} style={{ width: '100%', display: 'block' }} />
+                    ) : (
+                      <div style={{ font: `500 12.5px/1.6 ${font}`, color: color.muted, padding: '40px 0' }}>Loading QR…</div>
+                    )}
                   </div>
                   <div style={{
                     font: `700 22px/1.5 ui-monospace, monospace`, letterSpacing: '.08em', marginTop: 14,
@@ -99,14 +128,19 @@ export default function HandoverScreen({
           {!isSeller && !done && (
             <>
               <div style={{ position: 'relative', aspectRatio: '1/1', maxWidth: 320, margin: '0 auto 18px', borderRadius: 14, background: color.ink, overflow: 'hidden' }}>
+                {scanning && (
+                  <video ref={videoRef} style={{ width: '100%', height: '100%', objectFit: 'cover' }} muted playsInline />
+                )}
                 <div style={{ position: 'absolute', inset: '18%', border: '2px solid rgba(255,255,255,.18)', borderRadius: 10 }} />
                 {['tl', 'tr', 'bl', 'br'].map((p) => <div key={p} style={corner(p)} />)}
-                <div style={{ position: 'absolute', left: '20%', right: '20%', top: '50%', height: 2, background: color.pinkLight, boxShadow: '0 0 12px ' + color.pinkLight }} />
-                <div style={{ position: 'absolute', bottom: 14, left: 0, right: 0, textAlign: 'center', font: `500 12px/1.4 ${font}`, color: 'rgba(255,255,255,.8)' }}>
-                  {verifying ? 'Verifying code…' : 'Point at the seller’s QR'}
+                {!cameraError && (
+                  <div style={{ position: 'absolute', left: '20%', right: '20%', top: '50%', height: 2, background: color.pinkLight, boxShadow: '0 0 12px ' + color.pinkLight }} />
+                )}
+                <div style={{ position: 'absolute', bottom: 14, left: 0, right: 0, textAlign: 'center', font: `500 12px/1.4 ${font}`, color: 'rgba(255,255,255,.8)', padding: '0 12px' }}>
+                  {cameraError ? cameraError : verifying ? 'Verifying code…' : 'Point at the seller’s QR'}
                 </div>
               </div>
-              <div style={labelStyle}>Enter the seller’s handover code</div>
+              <div style={labelStyle}>Or enter the seller’s handover code</div>
               <div style={{ font: `400 12.5px/1.6 ${font}`, color: color.muted, marginTop: 6, textWrap: 'pretty' }}>
                 Ask {order.seller} for the code once you have checked the item. Entering it completes the sale.
               </div>

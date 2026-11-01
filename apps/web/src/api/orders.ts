@@ -1,6 +1,7 @@
 import { api } from './client';
 import { fetchListing, type ApiCategory } from './catalog';
 import { fetchProfile } from './profiles';
+import { fetchReviewedOrderIds } from './reviews';
 import type { Listing, Order, Sale } from '../types';
 
 export interface ApiOrder {
@@ -9,6 +10,7 @@ export interface ApiOrder {
   sellerId: string;
   itemId: string;
   itemTitle: string | null;
+  itemImageUrl: string | null;
   agreedPrice: string;
   status: 'Pending' | 'Completed' | 'Cancelled';
   createdAt: string;
@@ -28,7 +30,10 @@ function toOrderStatus(status: ApiOrder['status']): Order['status'] {
 }
 
 export function toOrder(order: ApiOrder, listing: Listing | null): Order {
-  const shortCode = order.id.slice(0, 8).toUpperCase();
+  // Seed orders all share the same id prefix ('20000000-...', so the dev dataset can be
+  // bulk-deleted on reseed) — slicing the front would give every one of them the same
+  // reference. The counter that actually varies lives in the tail of the id.
+  const shortCode = order.id.slice(-8).toUpperCase();
   return {
     id: order.id,
     reference: `ORD-${shortCode}`,
@@ -36,6 +41,7 @@ export function toOrder(order: ApiOrder, listing: Listing | null): Order {
     listingId: order.itemId,
     sellerId: order.sellerId,
     title: order.itemTitle ?? listing?.title ?? 'Unavailable item',
+    photo: order.itemImageUrl ?? listing?.photo,
     price: Number(order.agreedPrice),
     seller: listing?.seller ?? 'CU member',
     faculty: listing?.faculty ?? '',
@@ -48,10 +54,19 @@ export function toOrder(order: ApiOrder, listing: Listing | null): Order {
   };
 }
 
+// Catalog deliberately 404s item detail for anything not Available (so a buyer can't
+// browse a stranger's in-progress reservation). While an order is Pending the item is
+// Reserved, and once Completed it's Sold — neither ever passes, so fetching for those
+// is a guaranteed-failed request on every load. Cancelled is the only status where the
+// item might have gone back to Available, so it's the only one worth trying.
 async function withListings(orders: ApiOrder[], categories: ApiCategory[]) {
-  const itemIds = [...new Set(orders.map((o) => o.itemId))];
+  // `orders` arrives sorted newest-first, so the first order seen per itemId is the
+  // most recent one — the one whose status actually reflects the item right now.
+  const latestStatusByItem = new Map<string, ApiOrder['status']>();
+  for (const o of orders) if (!latestStatusByItem.has(o.itemId)) latestStatusByItem.set(o.itemId, o.status);
+  const worthFetching = [...latestStatusByItem].filter(([, status]) => status === 'Cancelled').map(([id]) => id);
   const listings = new Map(
-    await Promise.all(itemIds.map(async (id) => [id, await fetchListing(id, categories).catch(() => null)] as const)),
+    await Promise.all(worthFetching.map(async (id) => [id, await fetchListing(id, categories).catch(() => null)] as const)),
   );
   return orders.map((o) => toOrder(o, listings.get(o.itemId) ?? null));
 }
@@ -59,7 +74,12 @@ async function withListings(orders: ApiOrder[], categories: ApiCategory[]) {
 export async function fetchMyOrders(categories: ApiCategory[]) {
   const orders = await api<ApiOrder[]>(`${ORDERS}?role=buyer`);
   const sorted = [...orders].sort((a, b) => b.createdAt.localeCompare(a.createdAt));
-  return withListings(sorted, categories);
+  const completedSellerIds = [...new Set(sorted.filter((o) => o.status === 'Completed').map((o) => o.sellerId))];
+  const [withItems, reviewedOrderIds] = await Promise.all([
+    withListings(sorted, categories),
+    fetchReviewedOrderIds(completedSellerIds),
+  ]);
+  return withItems.map((o) => (reviewedOrderIds.has(o.id) ? { ...o, rated: true } : o));
 }
 
 export function fetchOrderDetail(orderId: string) {
@@ -78,6 +98,7 @@ export async function getPurchasesItem(categories: ApiCategory[]): Promise<Sale[
     id: order.id,
     listingId: order.listingId,
     title: order.title,
+    photo: order.photo,
     price: order.price,
     buyer: buyers.get(sorted[i].buyerId)?.displayName ?? 'CU member',
     when: order.placedAt,

@@ -28,6 +28,7 @@ export interface NewListing {
   categoryId: string;
   condition: string;
   handoverSpot: string;
+  imageUrls?: string[];
 }
 
 const CATALOG = '/api/v1/catalog';

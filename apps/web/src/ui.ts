@@ -11,7 +11,6 @@ export { default as Button } from './components/Button';
 export { default as Checkbox } from './components/Checkbox';
 export { default as Chip } from './components/Chip';
 export { default as Field } from './components/Field';
-export { default as HandoverQr } from './components/HandoverQr';
 export { default as Pill } from './components/Pill';
 export { default as Segmented } from './components/Segmented';
 export { default as Toggle } from './components/Toggle';

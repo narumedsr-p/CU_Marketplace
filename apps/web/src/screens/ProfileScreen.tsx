@@ -15,6 +15,7 @@ interface ProfileUser {
   faculty: string;
   joined?: string;
   since?: string;
+  photo?: string;
 }
 
 interface ProfileScreenProps {
@@ -25,6 +26,7 @@ interface ProfileScreenProps {
   stats: [string, string | number][];
   listings: Listing[];
   purchases?: Purchase[];
+  onRatePurchase?: (purchaseId: string) => void;
   sales?: Sale[];
   onShowHandoverCode?: (sale: Sale) => void;
   reviews?: Review[];
@@ -35,6 +37,9 @@ interface ProfileScreenProps {
   onWishlist: () => void;
   onSell: () => void;
   onChat: () => void;
+  // Chat rooms are always scoped to one of the seller's listings (the backend requires
+  // an itemId) — false when they currently have none to anchor a new chat to.
+  canChat?: boolean;
   onOpenListing: (listing: Listing) => void;
 }
 
@@ -44,9 +49,9 @@ interface ProfileScreenProps {
  *   other profile -> Chat with seller; Listings + Reviews only
  */
 export default function ProfileScreen({
-  user, isSelf, initialTab, focusReviewId, stats, listings, purchases = [], sales = [], onShowHandoverCode, reviews = [],
+  user, isSelf, initialTab, focusReviewId, stats, listings, purchases = [], onRatePurchase, sales = [], onShowHandoverCode, reviews = [],
   prefs = {}, onTogglePref, notificationPrefs = [],
-  onEditProfile, onWishlist, onSell, onChat, onOpenListing,
+  onEditProfile, onWishlist, onSell, onChat, canChat = true, onOpenListing,
 }: ProfileScreenProps) {
   const tabs = isSelf
     ? ['Listings', 'Purchases', 'Sales', 'Reviews', 'Notifications']
@@ -65,14 +70,23 @@ export default function ProfileScreen({
       <div style={{ height: 132, background: color.pink, backgroundImage: gradient }} />
 
       <div style={{ padding: '0 24px' }}>
-        <div style={{ display: 'flex', gap: 18, alignItems: 'flex-end', marginTop: -42, flexWrap: 'wrap' }}>
+        {/* alignItems:center (tried previously) ties the name's position to the avatar's
+            full 96px height — fine for a one-line name, but a two-line name then gets
+            pulled back up into the banner, same bug as before just smaller. The only way
+            to keep the name's clearance independent of its own height is a fixed offset
+            per item (flex-start), not a shared center/height computation. Kept both
+            offsets small (vs. the original -42/-48) so avatar and name still read as one
+            group instead of looking disconnected. */}
+        <div style={{ display: 'flex', gap: 18, alignItems: 'flex-start', flexWrap: 'wrap' }}>
           <div style={{
             width: 96, height: 96, borderRadius: 24, background: color.pinkLine,
             border: '4px solid ' + color.white, display: 'grid', placeItems: 'center',
-            font: `700 30px/1 ${font}`, color: color.pink, flex: 'none',
-          }}>{initialsOf(user.name)}</div>
+            font: `700 30px/1 ${font}`, color: color.pink, flex: 'none', marginTop: -20, overflow: 'hidden',
+          }}>
+            {user.photo ? <img src={user.photo} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : initialsOf(user.name)}
+          </div>
 
-          <div style={{ paddingBottom: 6, flex: 1, minWidth: 200 }}>
+          <div style={{ marginTop: 8, flex: 1, minWidth: 200 }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 9, flexWrap: 'wrap' }}>
               <div style={{ font: `700 22px/1.2 ${font}` }}>{user.name}</div>
               <div style={{
@@ -85,7 +99,7 @@ export default function ProfileScreen({
             </div>
           </div>
 
-          <div style={{ display: 'flex', gap: 9, paddingBottom: 6, flexWrap: 'wrap' }}>
+          <div style={{ display: 'flex', gap: 9, marginTop: 8, flexWrap: 'wrap' }}>
             {isSelf ? (
               <>
                 <Button size="sm" variant="ghost" onClick={onEditProfile}>Edit profile</Button>
@@ -94,7 +108,10 @@ export default function ProfileScreen({
               </>
             ) : (
               <>
-                <Button size="sm" onClick={onChat}>Chat with seller</Button>
+                <Button
+                  size="sm" onClick={onChat} disabled={!canChat}
+                  title={canChat ? undefined : 'This seller has no active listings to start a chat about right now.'}
+                >Chat with seller</Button>
               </>
             )}
           </div>
@@ -136,7 +153,12 @@ export default function ProfileScreen({
           <OrderTable
             intro="Everything you have bought, including cancelled reservations. Only you can see this tab."
             headers={['ITEM', 'SELLER', 'DATE', 'PAID', 'STATUS']}
-            rows={purchases.map((p) => ({ ...p, party: p.seller }))}
+            rows={purchases.map((p) => ({
+              ...p,
+              party: p.seller,
+              onAction: p.status === 'Completed' && !p.rated && onRatePurchase ? () => onRatePurchase(p.id) : undefined,
+              actionLabel: 'Rate seller',
+            }))}
           />
         )}
 
@@ -167,8 +189,10 @@ export default function ProfileScreen({
                 <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                   <div style={{
                     width: 34, height: 34, borderRadius: '50%', background: color.pinkLine,
-                    display: 'grid', placeItems: 'center', font: `700 11.5px/1 ${font}`, color: color.pink,
-                  }}>{initialsOf(r.name)}</div>
+                    display: 'grid', placeItems: 'center', font: `700 11.5px/1 ${font}`, color: color.pink, overflow: 'hidden',
+                  }}>
+                    {r.photo ? <img src={r.photo} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : initialsOf(r.name)}
+                  </div>
                   <div>
                     <div style={{ font: `600 13.5px/1.3 ${font}` }}>{r.name}</div>
                     <div style={{ font: `500 11.5px/1.3 ${font}`, color: color.faint, marginTop: 3 }}>
