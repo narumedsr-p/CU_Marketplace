@@ -127,6 +127,48 @@ group so traffic can reach it from outside.
 This sequence hasn't been run against a real EC2 instance yet; treat it as a starting point
 and adjust if something doesn't match your instance's setup.
 
+## Initialize the PostgreSQL databases
+
+The Postgres StatefulSet creates databases, but does not create Prisma tables. On a
+fresh cluster, apply migrations for **all five** PostgreSQL services: Catalog, Order,
+Wishlist, Review, and Profile. Without them, sign-in can return `service_unavailable`
+and initial page requests return HTTP 500 because the required tables do not exist.
+
+Run the Prisma CLI from the development checkout (the production image excludes it).
+In one terminal, forward the cluster's Postgres port:
+
+```bash
+kubectl port-forward -n cu-marketplace svc/postgres 15432:5432
+```
+
+In another terminal, set the database URLs below to the forwarded databases, using
+the cluster's actual Postgres password (URL-encoded if necessary). For example, Profile
+uses `postgresql://postgres:<URL-encoded-password>@127.0.0.1:15432/cu_profile_db?schema=public`.
+Run each service's migration against its own database:
+
+| Service | Environment variable | Database |
+| --- | --- | --- |
+| catalog-service | CATALOG_DATABASE_URL | cu_catalog_db |
+| order-service | ORDER_DATABASE_URL | cu_order_db |
+| wishlist-service | WISHLIST_DATABASE_URL | cu_wishlist_db |
+| review-service | REVIEW_DATABASE_URL | cu_review_db |
+| profile-service | PROFILE_DATABASE_URL | cu_profile_db |
+
+After exporting those URLs in the terminal:
+
+```bash
+for svc in catalog-service order-service wishlist-service review-service profile-service; do
+  pnpm --filter "$svc" exec prisma migrate deploy || break
+done
+```
+
+This adds the tables, migration history, and seven standard Catalog categories without
+rebuilding app images. It does not add demo listings, accounts, orders, or reviews.
+For an existing database that already contains tables, verify its schema and baseline
+the relevant initial migration instead of trying to create the tables again. A database
+that already applied the Catalog/Wishlist trigram migrations must likewise baseline the
+new, earlier initial migration after verifying the original tables exist.
+
 ## Redeploying after a change
 
 `apply.sh` covers config changes: edit anything in `k8s/` or `kong/` and rerun it.

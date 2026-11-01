@@ -1,6 +1,10 @@
 gateway:
   env:
-    untrusted_lua: "on"
+    # identity-headers runs inside the Lua sandbox. Allow only its JSON decoder
+    # and environment reader, and preserve the shared key in Nginx workers.
+    untrusted_lua: sandbox
+    untrusted_lua_sandbox_requires: cjson.safe
+    untrusted_lua_sandbox_environment: os.getenv
     nginx_main_env: INTERNAL_SERVICE_SECRET
   proxy:
     type: NodePort

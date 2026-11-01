@@ -50,6 +50,8 @@ export function getRabbitMqUrl(): string {
 
 export const QUEUES = {
   notification: 'notification_queue',
+  notificationRetry: 'notification_retry_queue',
+  notificationDlq: 'notification_dlq',
   catalogItemStatus: 'catalog_item_status_queue',
   catalogItemStatusRetry: 'catalog_item_status_retry_queue',
   catalogItemStatusDlq: 'catalog_item_status_dlq',
