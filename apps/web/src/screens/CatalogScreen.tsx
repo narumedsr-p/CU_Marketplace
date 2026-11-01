@@ -1,7 +1,7 @@
 import { color, font } from '../theme/tokens';
 import ListingGrid from '../components/ListingGrid';
 import Button from '../components/Button';
-import type { Listing } from '../types';
+import type { AutoMatchAlert, Listing } from '../types';
 
 interface CatalogScreenProps {
   listings: Listing[];
@@ -9,6 +9,11 @@ interface CatalogScreenProps {
   onOpenListing: (listing: Listing) => void;
   onPickCategory: (cat: string) => void;
   onSeeAll: () => void;
+  alerts: AutoMatchAlert[];
+  alertsLoading?: boolean;
+  alertsError?: string | null;
+  onOpenAutoMatch: (id?: string | number) => void;
+  onNewAutoMatch: () => void;
   loading?: boolean;
   density?: 'comfortable' | 'compact';
 }
@@ -16,6 +21,7 @@ interface CatalogScreenProps {
 // Category rail + two promo panels + the newest-first feed.
 export default function CatalogScreen({
   listings, categories, onOpenListing, onPickCategory, onSeeAll, loading, density,
+  alerts, alertsLoading = false, alertsError = null, onOpenAutoMatch, onNewAutoMatch,
 }: CatalogScreenProps) {
   return (
     <div style={{ padding: '0 0 40px' }}>
@@ -66,13 +72,44 @@ export default function CatalogScreen({
                 Tell us the keyword. We ping you the second it is posted.
               </div>
             </div>
-            <div style={{ display: 'flex', gap: 7, flexWrap: 'wrap', marginTop: 14 }}>
-              {['"fx-991"', '"lab coat M"', '+ new'].map((k) => (
-                <div key={k} style={{
+            <div style={{ marginTop: 14 }}>
+              {alertsLoading && !alerts.length ? (
+                <div role="status" style={{ font: `400 12px/1.5 ${font}`, marginBottom: 8 }}>Loading your alerts…</div>
+              ) : alertsError ? (
+                <div role="status" style={{ font: `400 12px/1.5 ${font}`, marginBottom: 8 }}>
+                  Could not refresh your alerts. Open Auto-match to try again.
+                </div>
+              ) : !alerts.length ? (
+                <div style={{ font: `400 12px/1.5 ${font}`, marginBottom: 8 }}>No alerts yet. Add your first keyword.</div>
+              ) : null}
+              <div style={{ display: 'flex', gap: 7, flexWrap: 'wrap' }}>
+                {alerts.slice(0, 3).map((alert) => (
+                  <button key={alert.id} type="button" onClick={() => onOpenAutoMatch(alert.id)}
+                    title={`${alert.text} · ${alert.cat && alert.cat !== 'Any' ? alert.cat : 'Any category'}${alert.on ? '' : ' · Paused'}`}
+                    aria-label={`View auto-match for ${alert.text}${alert.on ? '' : ' (paused)'}`}
+                    style={{
+                      padding: '5px 10px', borderRadius: 7, background: 'rgba(255,255,255,.12)',
+                      border: '1px solid transparent', color: color.white, cursor: 'pointer',
+                      font: `500 11.5px/1.4 ${font}`, maxWidth: '100%',
+                      overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                      opacity: alert.on ? 1 : 0.65,
+                    }}>
+                    “{alert.text}”{!alert.on && ' · Paused'}
+                  </button>
+                ))}
+                {(alerts.length > 3 || alertsError) && (
+                  <button type="button" onClick={() => onOpenAutoMatch()} style={{
+                    padding: '5px 10px', borderRadius: 7, background: 'rgba(255,255,255,.12)',
+                    border: '1px solid transparent', color: color.white, cursor: 'pointer',
+                    font: `500 11.5px/1.4 ${font}`,
+                  }}>{alertsError ? 'Open Auto-match' : `View all (${alerts.length})`}</button>
+                )}
+                <button type="button" onClick={onNewAutoMatch} aria-label="Add a new auto-match alert" style={{
                   padding: '5px 10px', borderRadius: 7, background: 'rgba(255,255,255,.12)',
-                  font: `500 11.5px/1.4 ${font}`, whiteSpace: 'nowrap',
-                }}>{k}</div>
-              ))}
+                  border: '1px solid transparent', color: color.white, cursor: 'pointer',
+                  font: `500 11.5px/1.4 ${font}`,
+                }}>+ new</button>
+              </div>
             </div>
           </div>
         </div>

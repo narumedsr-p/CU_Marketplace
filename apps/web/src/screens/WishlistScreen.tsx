@@ -1,4 +1,4 @@
-import { useState, type ChangeEvent, type KeyboardEvent } from 'react';
+import { useEffect, useRef, useState, type ChangeEvent, type KeyboardEvent } from 'react';
 import { color, font, baht, labelStyle, card, pageTitle, pageSub } from '../theme/tokens';
 import Segmented from '../components/Segmented';
 import Button from '../components/Button';
@@ -25,6 +25,9 @@ interface WishlistScreenProps {
   error?: string | null;
   onRetry: () => Promise<void>;
   initialTab?: WishlistTab;
+  selectedAlertId?: string;
+  focusNewAlert?: boolean;
+  onShowAllAlerts: () => void;
   onOpenListing: (listing: Listing) => void;
   onRemove: (id: string) => Promise<void>;
   onBrowse: () => void;
@@ -37,6 +40,7 @@ interface WishlistScreenProps {
 // Smart Wishlist & Auto-Matching (FR 4.1–4.7).
 export default function WishlistScreen({
   saved = [], alerts = [], matches = [], categories = [], loading = false, error = null, onRetry, initialTab = 'saved',
+  selectedAlertId, focusNewAlert = false, onShowAllAlerts,
   onOpenListing, onRemove, onBrowse,
   onCreateAlert, onUpdateAlert, onDeleteAlert, onToggleAlert,
 }: WishlistScreenProps) {
@@ -45,6 +49,21 @@ export default function WishlistScreen({
   const [editingId, setEditingId] = useState<string | number | null>(null);
   const [busyId, setBusyId] = useState<string | number | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const createFormRef = useRef<HTMLDivElement>(null);
+  const selectedAlertRef = useRef<HTMLDivElement>(null);
+  const selectedAlert = alerts.find((alert) => String(alert.id) === selectedAlertId);
+  const visibleMatches = selectedAlert
+    ? matches.filter((match) => match.ruleId === String(selectedAlert.id))
+    : matches;
+
+  useEffect(() => {
+    if (tab !== 'alerts') return;
+    if (focusNewAlert) {
+      createFormRef.current?.querySelector('input')?.focus();
+    } else if (selectedAlert) {
+      selectedAlertRef.current?.scrollIntoView({ block: 'nearest' });
+    }
+  }, [tab, focusNewAlert, selectedAlert?.id]);
 
   const reset = () => { setDraft({ text: '', cat: 'Any' }); setEditingId(null); };
   const submit = async () => {
@@ -140,9 +159,10 @@ export default function WishlistScreen({
       {tab === 'alerts' && (
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(300px,1fr))', gap: 18, marginTop: 18, alignItems: 'start' }}>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-            <div style={{ ...card, padding: 16 }}>
+            <div ref={createFormRef} style={{ ...card, padding: 16 }}>
               <Field
                 label={editingId !== null ? 'Edit alert' : 'New auto-match alert'}
+                aria-label={editingId !== null ? 'Edit auto-match keyword' : 'New auto-match keyword'}
                 value={draft.text} placeholder="e.g. fx-991, lab coat M, iPad"
                 onChange={(e: ChangeEvent<HTMLInputElement>) => setDraft({ ...draft, text: e.target.value })}
                 onKeyDown={(e: KeyboardEvent<HTMLInputElement>) => e.key === 'Enter' && submit()}
@@ -169,9 +189,10 @@ export default function WishlistScreen({
             <div style={{ ...card, overflow: 'hidden' }}>
               <div style={{ ...labelStyle, padding: '13px 16px', borderBottom: '1px solid ' + color.lineSoft }}>My auto-match alerts · {alerts.length}</div>
               {alerts.map((a) => (
-                <div key={a.id} style={{
+                <div key={a.id} ref={String(a.id) === selectedAlertId ? selectedAlertRef : undefined} style={{
                   display: 'flex', alignItems: 'center', gap: 12, padding: '13px 16px',
-                  borderBottom: '1px solid ' + color.lineSoft, background: editingId === a.id ? color.pinkTint : color.white,
+                  borderBottom: '1px solid ' + color.lineSoft,
+                  background: editingId === a.id || String(a.id) === selectedAlertId ? color.pinkTint : color.white,
                 }}>
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <div style={{ font: `600 14px/1.3 ${font}`, color: a.on ? color.ink : color.faint }}>“{a.text}”</div>
@@ -187,16 +208,28 @@ export default function WishlistScreen({
                   <Toggle checked={a.on} onChange={() => { void runItemAction(a.id, () => onToggleAlert(a.id)); }} />
                 </div>
               ))}
-              {!alerts.length && <div style={{ padding: '22px 16px', font: `400 13px/1.6 ${font}`, color: color.muted }}>No alerts yet. Add a keyword above.</div>}
+              {!alerts.length && <div style={{ padding: '22px 16px', font: `400 13px/1.6 ${font}`, color: color.muted }}>
+                {loading ? 'Loading your alerts…' : 'No alerts yet. Add a keyword above.'}
+              </div>}
             </div>
           </div>
 
           <div style={{ ...card, overflow: 'hidden' }}>
+            {selectedAlertId && (
+              <div style={{ padding: '13px 16px', background: color.pinkTint, borderBottom: '1px solid ' + color.lineSoft }}>
+                <div style={{ font: `600 13px/1.5 ${font}`, overflowWrap: 'anywhere' }}>
+                  {selectedAlert ? `Selected alert: “${selectedAlert.text}”`
+                    : loading ? 'Loading selected alert…' : error ? 'Could not load the selected alert.'
+                      : 'This alert is no longer available. Showing all matches.'}
+                </div>
+                <Button size="sm" variant="ghost" onClick={onShowAllAlerts} style={{ marginTop: 8 }}>Show all alerts</Button>
+              </div>
+            )}
             <div style={{ padding: '13px 16px', borderBottom: '1px solid ' + color.lineSoft, display: 'flex', alignItems: 'center' }}>
               <div style={labelStyle}>Matching listings now</div>
-              <div style={{ marginLeft: 'auto', font: `600 12px/1 ${font}`, color: color.pink }}>{matches.length}</div>
+              <div style={{ marginLeft: 'auto', font: `600 12px/1 ${font}`, color: color.pink }}>{visibleMatches.length}</div>
             </div>
-            {matches.map(({ id, listing: l, keyword }) => (
+            {visibleMatches.map(({ id, listing: l, keyword }) => (
               <div key={id} onClick={() => onOpenListing(l)} style={{
                 display: 'flex', gap: 12, alignItems: 'center', padding: '12px 16px',
                 borderBottom: '1px solid ' + color.lineSoft, cursor: 'pointer',
@@ -209,9 +242,12 @@ export default function WishlistScreen({
                 <div style={{ font: `700 14px/1 ${font}`, color: color.pink, flex: 'none' }}>{baht(l.price)}</div>
               </div>
             ))}
-            {!matches.length && (
+            {!visibleMatches.length && (
               <div style={{ padding: '22px 16px', font: `400 13px/1.6 ${font}`, color: color.muted }}>
-                Nothing on the catalog matches your active alerts right now. We'll ping you when it's posted.
+                {loading ? 'Loading matching listings…'
+                  : selectedAlert && !selectedAlert.on ? 'This alert is paused. Turn it on to watch for new listings.'
+                    : selectedAlert ? 'No listings match this alert right now. We’ll notify you when one is posted.'
+                      : "Nothing on the catalog matches your active alerts right now. We'll ping you when it's posted."}
               </div>
             )}
           </div>
