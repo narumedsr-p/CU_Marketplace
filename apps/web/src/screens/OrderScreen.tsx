@@ -1,8 +1,9 @@
-import { color, font, baht, labelStyle, photoFill } from '../theme/tokens';
+import { color, font, baht, labelStyle } from '../theme/tokens';
 import StatusBadge from '../components/StatusBadge';
 import OrderTimeline from '../components/OrderTimeline';
 import Button from '../components/Button';
 import EmptyState from '../components/EmptyState';
+import PhotoSlot from '../components/PhotoSlot';
 import type { Order, TimelineStep } from '../types';
 
 interface OrderScreenProps {
@@ -62,9 +63,7 @@ export default function OrderScreen({
             border: '1px solid ' + color.line, borderRadius: 12, padding: 15,
             display: 'flex', gap: 14,
           }}>
-            <div style={{
-              width: 88, height: 88, flex: 'none', borderRadius: 9, background: photoFill,
-            }} />
+            <PhotoSlot src={order.photo} label="" radius={9} style={{ width: 88, height: 88, flex: 'none' }} />
             <div style={{ minWidth: 0 }}>
               <div style={{ font: `600 15px/1.35 ${font}`, textWrap: 'pretty' }}>{order.title}</div>
               <div style={{ font: `700 19px/1 ${font}`, color: color.pink, marginTop: 7 }}>

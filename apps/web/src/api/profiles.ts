@@ -61,5 +61,6 @@ export function toUser(profile: ApiProfile): CurrentUser {
     memberType: profile.role,
     faculty: '',
     joined: new Date(profile.createdAt).toLocaleDateString('en-GB', { month: 'short', year: 'numeric' }),
+    photo: profile.avatarUrl,
   };
 }

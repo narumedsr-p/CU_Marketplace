@@ -8,6 +8,7 @@ import type { Listing } from '../types';
 
 interface ListingScreenProps {
   listing: Listing;
+  sellerPhoto?: string;
   isOwner: boolean;
   isMyReservation: boolean;
   onViewMyOrder: () => void;
@@ -24,7 +25,7 @@ interface ListingScreenProps {
 
 // Listing detail. No view counter by design — wishlist count is the social proof.
 export default function ListingScreen({
-  listing, isOwner, isMyReservation, onViewMyOrder, onManage, onShowHandoverQr, onDelete, onCancelReservation,
+  listing, sellerPhoto, isOwner, isMyReservation, onViewMyOrder, onManage, onShowHandoverQr, onDelete, onCancelReservation,
   onPlaceOrder, onChat, onToggleWishlist, wished,
   onViewSeller,
 }: ListingScreenProps) {
@@ -154,7 +155,7 @@ export default function ListingScreen({
           <div style={{ marginTop: 18 }}>
             <SellerTrustCard
               seller={{
-                name: listing.seller, rating: listing.rating, reviewCount: listing.reviewCount,
+                name: listing.seller, photo: sellerPhoto, rating: listing.rating, reviewCount: listing.reviewCount,
                 faculty: listing.faculty ?? '', handovers: listing.handovers,
                 replyTime: listing.replyTime, since: listing.since,
               }}

@@ -1,9 +1,10 @@
-import type { ChangeEvent } from 'react';
-import { color, font, labelStyle, photoFill } from '../theme/tokens';
+import { useRef, type ChangeEvent } from 'react';
+import { color, font, labelStyle } from '../theme/tokens';
 import Field from '../components/Field';
 import Chip from '../components/Chip';
 import Button from '../components/Button';
 import ListingCard from '../components/ListingCard';
+import PhotoSlot from '../components/PhotoSlot';
 import type { SellForm } from '../types';
 
 interface SellScreenProps {
@@ -14,21 +15,24 @@ interface SellScreenProps {
   conditions: string[];
   spots: string[];
   photos?: string[];
-  onAddPhoto: () => void;
+  photosUploading?: boolean;
+  onPickPhotos: (files: File[]) => void;
+  onRemovePhoto: (index: number) => void;
 }
 
 // Post-a-listing form with a live card preview. Controlled: pass form + onChange.
 export default function SellScreen({
   form, onChange, onPublish, categories, conditions, spots, photos = [],
-  onAddPhoto,
+  photosUploading = false, onPickPhotos, onRemovePhoto,
 }: SellScreenProps) {
   const set = (patch: Partial<SellForm>) => onChange({ ...form, ...patch });
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   return (
     <div style={{ padding: '22px 24px 40px' }}>
       <div style={{ font: `700 22px/1.2 ${font}`, letterSpacing: '-.01em' }}>Post a listing</div>
       <div style={{ font: `400 13.5px/1.6 ${font}`, color: color.muted, marginTop: 6 }}>
-        Add a title, price, category, condition and handover spot. Photo upload is not available yet.
+        Add a title, price, category, condition and handover spot.
       </div>
 
       <div style={{
@@ -37,21 +41,39 @@ export default function SellScreen({
       }}>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
           <div>
-            <div style={{ ...labelStyle, marginBottom: 9 }}>Photos · up to 6</div>
+            <div style={{ ...labelStyle, marginBottom: 9 }}>Photos · up to 6 · 5MB each</div>
+            <input
+              ref={fileInputRef} type="file" accept="image/*" multiple hidden
+              onChange={(e: ChangeEvent<HTMLInputElement>) => {
+                if (e.target.files?.length) onPickPhotos(Array.from(e.target.files));
+                e.target.value = '';
+              }}
+            />
             <div style={{
               display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(104px,1fr))', gap: 10,
             }}>
-              <div onClick={onAddPhoto} style={{
-                aspectRatio: '1/1', borderRadius: 10, border: '1.5px dashed #E9A9C6',
-                background: color.pinkTint, display: 'grid', placeItems: 'center',
-                cursor: 'pointer', font: `600 11px/1.4 ${font}`, color: color.pink, textAlign: 'center',
-              }}>+ Add<br />photo</div>
-              {(photos.length ? photos : [1, 2, 3]).map((p, i) => (
-                <div key={i} style={{
-                  aspectRatio: '1/1', borderRadius: 10, background: photoFill,
-                  border: '1px solid ' + color.line, display: 'grid', placeItems: 'center',
-                  font: '600 9px/1 ui-monospace,monospace', color: '#E27FA9',
-                }}>{'PH ' + (i + 1)}</div>
+              {photos.length < 6 && (
+                <div
+                  onClick={() => !photosUploading && fileInputRef.current?.click()}
+                  style={{
+                    aspectRatio: '1/1', borderRadius: 10, border: '1.5px dashed #E9A9C6',
+                    background: color.pinkTint, display: 'grid', placeItems: 'center',
+                    cursor: photosUploading ? 'wait' : 'pointer',
+                    font: `600 11px/1.4 ${font}`, color: color.pink, textAlign: 'center',
+                  }}
+                >{photosUploading ? 'Uploading…' : <>+ Add<br />photo</>}</div>
+              )}
+              {photos.map((photo, i) => (
+                <PhotoSlot key={photo} src={photo} radius={10} style={{ border: '1px solid ' + color.line }}>
+                  <button
+                    type="button" onClick={() => onRemovePhoto(i)} aria-label={`Remove photo ${i + 1}`}
+                    style={{
+                      position: 'absolute', top: 4, right: 4, width: 20, height: 20, borderRadius: 999,
+                      border: 0, background: 'rgba(0,0,0,.55)', color: '#fff', cursor: 'pointer',
+                      font: '600 12px/1 sans-serif', lineHeight: 1,
+                    }}
+                  >×</button>
+                </PhotoSlot>
               ))}
             </div>
           </div>
@@ -112,7 +134,7 @@ export default function SellScreen({
               listing={{
                 title: form.title || 'Your title appears here',
                 price: form.price || 0, cat: form.cat || 'Category', cond: form.cond,
-                rating: '—', sold: 0, status: 'Available',
+                rating: '—', sold: 0, status: 'Available', photo: photos[0],
               }}
             />
           </div>

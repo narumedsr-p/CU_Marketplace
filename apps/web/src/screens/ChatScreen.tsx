@@ -78,7 +78,7 @@ export default function ChatScreen({
                     display: 'flex', gap: 11, padding: '12px 14px', cursor: 'pointer', alignItems: 'flex-start',
                     background: on ? color.pinkTint : color.white,
                   }}>
-                    <Avatar name={t.name} online={t.online} />
+                    <Avatar name={t.name} src={t.photo} online={t.online} />
                     <div style={{ flex: 1, minWidth: 0 }}>
                       <div style={{ display: 'flex', alignItems: 'baseline', gap: 6 }}>
                         <div style={{ flex: 1, minWidth: 0, font: `600 13.5px/1.3 ${font}`, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{t.name}</div>
@@ -112,7 +112,7 @@ export default function ChatScreen({
               {compact && (
                 <div onClick={onBack} style={{ width: 34, height: 34, display: 'grid', placeItems: 'center', font: `600 18px/1 ${font}`, color: color.pink, cursor: 'pointer', flex: 'none' }}>‹</div>
               )}
-              <Avatar name={cur.name} size={38} />
+              <Avatar name={cur.name} src={cur.photo} size={38} />
               <div style={{ flex: 1, minWidth: 0 }}>
                 <div style={{ font: `600 14.5px/1.3 ${font}`, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{cur.name}</div>
                 <div style={{ font: `500 12px/1.3 ${font}`, color: cur.online ? '#1E7A44' : color.faint, marginTop: 2 }}>

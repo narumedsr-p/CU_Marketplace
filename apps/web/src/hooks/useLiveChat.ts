@@ -32,6 +32,7 @@ async function toThread(room: ApiChatRoom, me: string | null, categories: ApiCat
   return {
     id: room.id,
     name: profile?.displayName || 'Student',
+    photo: profile?.avatarUrl,
     unread: 0,
     listing: listing
       ? { id: listing.id, title: listing.title, price: listing.price, status: listing.status, photo: listing.photos?.[0] }

@@ -1,7 +1,8 @@
 import { useState } from 'react';
 import EmptyState from '../components/EmptyState';
 import StatusBadge from '../components/StatusBadge';
-import { baht, color, font, photoFill } from '../theme/tokens';
+import PhotoSlot from '../components/PhotoSlot';
+import { baht, color, font } from '../theme/tokens';
 import type { Order } from '../types';
 
 type OrderFilter = 'All' | 'Active' | 'Completed';
@@ -82,7 +83,7 @@ export default function OrdersListScreen({ orders, onOpenOrder, onBrowse }: Orde
               }}
             >
               <div style={{ display: 'flex', gap: 15, padding: 15, alignItems: 'center' }}>
-                <div style={{ width: 78, height: 78, borderRadius: 9, background: photoFill, flex: 'none' }} />
+                <PhotoSlot src={order.photo} label="" radius={9} style={{ width: 78, flex: 'none' }} />
 
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div style={{ display: 'flex', gap: 10, justifyContent: 'space-between', alignItems: 'start' }}>

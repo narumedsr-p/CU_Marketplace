@@ -375,7 +375,11 @@ function buildItemsAndOrders(users) {
       const daysAgo = int(0, 200);
       const hoursAgo = int(0, 23);
       const id = itemUuid(itemCounter++);
-      items.push({
+      // images is computed inline, in the same object-literal property position as
+      // before: hoisting pictureUrls() out ahead of composeDescription() would call it
+      // earlier in the shared RNG sequence and drift every random choice after it,
+      // changing the whole deterministic dataset (e.g. the total order count).
+      const newItem = {
         id,
         sellerId: seller.id,
         categoryId: CATEGORIES[cat.key],
@@ -386,7 +390,9 @@ function buildItemsAndOrders(users) {
         images: pictureUrls(id.slice(-8)),
         daysAgo,
         hoursAgo,
-      });
+      };
+      items.push(newItem);
+      const images = newItem.images;
 
       if (status === "Sold" || status === "Reserved") {
         let buyer;
@@ -400,9 +406,15 @@ function buildItemsAndOrders(users) {
           buyerId: buyer.id,
           sellerId: seller.id,
           itemId: id,
+          itemTitle: built.title,
+          itemImageUrl: images[0] ?? null,
           agreedPrice,
           status: status === "Sold" ? "Completed" : "Pending",
-          qrToken: `qr_${id.slice(-8)}`,
+          // Must match the real token format (32 lowercase hex chars from
+          // randomBytes(16).toString('hex')) — the frontend's normalizeHandoverCode()
+          // rejects anything else before the request ever reaches the backend, which
+          // would make every seeded order's handover flow fail validation client-side.
+          qrToken: id.slice(-8).repeat(4),
           daysAgo: orderDaysAgo,
           completed: status === "Sold",
         });
@@ -418,6 +430,8 @@ function buildItemsAndOrders(users) {
           buyerId: buyer.id,
           sellerId: seller.id,
           itemId: id,
+          itemTitle: built.title,
+          itemImageUrl: images[0] ?? null,
           agreedPrice: built.price,
           status: "Cancelled",
           qrToken: null,
@@ -454,13 +468,25 @@ function renderItemsSql(items) {
       return `  ('${it.id}', '${it.sellerId}', '${it.categoryId}', '${it.title}', '${it.description}', ${it.price.toFixed(2)}, '${it.status}', ${imgArray}, ${created}, now())`;
     })
     .join(",\n");
-  return `INSERT INTO "Item" (item_id, seller_id, category_id, title, description, price, status, image_urls, created_at, updated_at) VALUES
+  // Delete only this generator's own items (fixed '11000000-' id prefix) before
+  // re-inserting, so a changed generator output replaces stale rows instead of
+  // being silently skipped by ON CONFLICT DO NOTHING. Never touches real listings
+  // created through the actual app, which get random (non-'11000000-') UUIDs.
+  return `DELETE FROM "Item" WHERE item_id::text LIKE '11000000-%';
+
+INSERT INTO "Item" (item_id, seller_id, category_id, title, description, price, status, image_urls, created_at, updated_at) VALUES
 ${values}
 ON CONFLICT (item_id) DO NOTHING;
 `;
 }
 
+// Only ever deletes this generator's own synthetic accounts (fixed '00000000-...-00000000'
+// id prefix, 'seed-*@...' email). The real dev account (REAL_USER, random UUID) and anyone
+// who actually signed in through Google OAuth (also a random UUID) are never matched by
+// this prefix, so they survive a reseed untouched.
 const HANDWRITTEN_USERS_SQL = `\\connect cu_profile_db
+
+DELETE FROM "UserProfile" WHERE user_id::text LIKE '00000000-0000-0000-0000-00000000%';
 
 INSERT INTO "UserProfile" (user_id, email, display_name, avatar_url, contact_info, updated_at) VALUES
   ('00000000-0000-0000-0000-000000000001', 'seed-001@student.chula.ac.th', 'Poonnawit Supawasuwat', '', 'seed-001@student.chula.ac.th', now()),
@@ -494,12 +520,18 @@ function renderOrdersSql(orders) {
       const created = `now() - interval '${o.daysAgo} days'`;
       const completedAt = o.completed ? `now() - interval '${o.daysAgo} days' + interval '2 hours'` : "NULL";
       const qr = o.qrToken ? `'${o.qrToken}'` : "NULL";
-      return `  ('${o.id}', '${o.buyerId}', '${o.sellerId}', '${o.itemId}', ${o.agreedPrice.toFixed(2)}, '${o.status}', ${qr}, ${created}, now(), ${completedAt})`;
+      const image = o.itemImageUrl ? `'${o.itemImageUrl}'` : "NULL";
+      return `  ('${o.id}', '${o.buyerId}', '${o.sellerId}', '${o.itemId}', '${sqlEscape(o.itemTitle)}', ${image}, ${o.agreedPrice.toFixed(2)}, '${o.status}', ${qr}, ${created}, now(), ${completedAt})`;
     })
     .join(",\n");
+  // Same scoped-delete pattern as Items/UserProfile: only this generator's own orders
+  // (fixed '20000000-' id prefix) are replaced, real orders placed through the app keep
+  // their random UUID and are left alone.
   return `\\connect cu_order_db
 
-INSERT INTO "Order" (order_id, buyer_id, seller_id, item_id, agreed_price, status, qr_token, created_at, updated_at, completed_at) VALUES
+DELETE FROM "Order" WHERE order_id::text LIKE '20000000-%';
+
+INSERT INTO "Order" (order_id, buyer_id, seller_id, item_id, item_title, item_image_url, agreed_price, status, qr_token, created_at, updated_at, completed_at) VALUES
 ${values}
 ON CONFLICT (order_id) DO NOTHING;
 `;

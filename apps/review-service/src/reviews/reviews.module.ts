@@ -16,7 +16,7 @@ import { getServiceGrpcUrl, getRabbitMqUrl, getRetryableQueueOptions, QUEUES } f
           transport: Transport.GRPC,
           options: {
             package: 'order',
-            protoPath: join(__dirname, '../.. /../libs/contracts/proto/order.proto'),
+            protoPath: join(__dirname, '../../../libs/contracts/proto/order.proto'),
             url: getServiceGrpcUrl('order'),
           },
         }),

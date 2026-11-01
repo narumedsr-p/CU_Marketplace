@@ -40,6 +40,7 @@ export interface CurrentUser {
   memberType: string;
   faculty: string;
   joined: string;
+  photo?: string;
 }
 
 export interface Purchase {
@@ -51,12 +52,14 @@ export interface Purchase {
   status: ListingStatus;
   action: string;
   spot: string;
+  rated?: boolean;
 }
 
 export interface Sale {
   id: string;
   listingId: string;
   title: string;
+  photo?: string;
   price: number;
   buyer: string;
   when: string;
@@ -68,6 +71,7 @@ export interface Sale {
 export interface Review {
   id: string;
   name: string;
+  photo?: string;
   item: string;
   when: string;
   stars: number;
@@ -89,6 +93,7 @@ export interface Order {
   listingId: string;
   sellerId: string;
   title: string;
+  photo?: string;
   price: number;
   seller: string;
   faculty: string;
@@ -108,6 +113,7 @@ export interface TimelineStep {
 
 export interface SellerInfo {
   name: string;
+  photo?: string;
   rating: number | string;
   reviewCount: number;
   faculty: string;
@@ -191,6 +197,7 @@ export interface ChatThread {
   // number for the offline demo threads, chat-service room id (uuid) for real rooms
   id: number | string;
   name: string;
+  photo?: string;
   faculty?: string;
   online?: boolean;
   presence?: string;
@@ -234,6 +241,7 @@ export interface HandoverOrder {
   spot: string;
   window: string;
   photo?: string;
+  qrImageDataUrl?: string;
 }
 
 export type HandoverRole = 'buyer' | 'seller';
@@ -245,6 +253,7 @@ export interface ReviewOrderSummary {
   title: string;
   price: number;
   seller: string;
+  sellerPhoto?: string;
   when: string;
   status: ListingStatus;
   photo?: string;

@@ -157,6 +157,60 @@ spec:
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
+  name: storage-ingress
+  namespace: cu-marketplace
+  annotations:
+    # false, and the path below is the literal bucket name, not a generic '/storage'
+    # prefix: SigV4 signs the full request path, and Garage's path-style addressing
+    # reads the first path segment as the bucket name. A '/storage' prefix that Kong
+    # stripped would sign one path but deliver another (invalid signature); forwarding
+    # it unstripped would make Garage look for a bucket literally named "storage". The
+    # only path that is simultaneously correct for both signing and bucket routing is
+    # the bucket's own name, passed through untouched.
+    konghq.com/strip-path: "false"
+    konghq.com/plugins: rate-limit
+spec:
+  ingressClassName: kong
+  rules:
+    - http:
+        paths:
+          # Presigned PUT/GET requests from the browser straight to Garage's S3 API.
+          # No jwt-auth here: the request's own SigV4 signature is the authentication,
+          # and a JWT plugin would reject these requests before Garage ever sees them.
+          - path: /cu-marketplace-images
+            pathType: Prefix
+            backend:
+              service: { name: garage, port: { number: 3900 } }
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: catalog-photos-ingress
+  namespace: cu-marketplace
+  annotations:
+    # false on purpose (every other catalog route uses true): PhotosController matches
+    # the full /api/v1/catalog/photos/:key path rather than assuming it's pre-stripped,
+    # so a bare ':key' route doesn't end up shadowing sibling routes at the service root.
+    konghq.com/strip-path: "false"
+    konghq.com/plugins: identity-headers,rate-limit
+spec:
+  ingressClassName: kong
+  rules:
+    - http:
+        paths:
+          # More specific than protected-ingress's /api/v1/catalog, so Kong matches this
+          # one first. identity-headers (but not jwt-auth) still runs, since catalog-service's
+          # own InternalAuthGuard requires X-Internal-Key on every request regardless of
+          # end-user identity — photos are viewed via plain <img src>, which can't attach
+          # an Authorization header, so requiring a user JWT here isn't an option.
+          - path: /api/v1/catalog/photos
+            pathType: Prefix
+            backend:
+              service: { name: catalog-service, port: { number: 3001 } }
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
   name: chat-socket-ingress
   namespace: cu-marketplace
   annotations:

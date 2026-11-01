@@ -31,6 +31,7 @@ export class OrdersService {
     sellerId: true,
     itemId: true,
     itemTitle: true,
+    itemImageUrl: true,
     agreedPrice: true,
     status: true,
     createdAt: true,
@@ -78,6 +79,7 @@ export class OrdersService {
       data: {
         itemId: data.itemId,
         itemTitle: item.title,
+        itemImageUrl: item.imageUrls?.[0] ?? null,
         buyerId: data.buyerId,
         sellerId: item.sellerId,
         agreedPrice: item.price,
